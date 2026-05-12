@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 
 def rgb_to_grayscale(image):
@@ -67,3 +68,120 @@ def equalize_histogram(image):
     
     return equalized_image.reshape(image.shape).astype(np.float64)
 
+
+
+def resize_images(images, target_size=None):
+    """
+    Redimensionne une liste d'images pour qu'elles aient toutes
+    les mêmes dimensions.
+
+    Paramètres
+    ----------
+    images : list
+        Liste d'images numpy (grayscale ou RGB)
+
+    target_size : tuple (width, height), optionnel
+        Taille cible.
+        Si None : utilise la taille de la première image.
+
+    Retour
+    ------
+    resized_images : list
+        Liste des images redimensionnées
+    """
+
+    if len(images) == 0:
+        return []
+
+    # Taille cible = taille de la première image
+    if target_size is None:
+        h, w = images[0].shape[:2]
+        target_size = (w, h)
+
+    resized_images = []
+
+    for img in images:
+        resized = cv2.resize(
+            img,
+            target_size,
+            interpolation=cv2.INTER_AREA
+        )
+        resized_images.append(resized)
+
+    return resized_images
+
+
+
+def add_noise(images, noise_type="gaussian", strength=25):
+    """
+    Ajoute du bruit à une liste d'images.
+
+    Paramètres
+    ----------
+    images : list
+        Liste d'images numpy
+
+    noise_type : str
+        "gaussian" ou "salt_pepper"
+
+    strength : float
+        Intensité du bruit
+
+    Retour
+    ------
+    noisy_images : list
+        Liste des images bruitées
+    """
+
+    noisy_images = []
+
+    for img in images:
+
+        # Conversion en float pour éviter les dépassements
+        noisy = img.astype(np.float32)
+
+        # =========================
+        # Bruit gaussien
+        # =========================
+        if noise_type == "gaussian":
+
+            noise = np.random.normal(
+                loc=0,
+                scale=strength,
+                size=img.shape
+            )
+
+            noisy = noisy + noise
+
+        # =========================
+        # Bruit sel / poivre
+        # =========================
+        elif noise_type == "salt_pepper":
+
+            prob = strength
+
+            noisy = noisy.copy()
+
+            # Pixels blancs
+            salt_mask = np.random.rand(*img.shape[:2]) < prob / 2
+
+            # Pixels noirs
+            pepper_mask = np.random.rand(*img.shape[:2]) < prob / 2
+
+            if img.ndim == 3:
+                noisy[salt_mask] = [255] * img.shape[2]
+                noisy[pepper_mask] = [0] * img.shape[2]
+            else:
+                noisy[salt_mask] = 255
+                noisy[pepper_mask] = 0
+
+        else:
+            raise ValueError("noise_type doit être 'gaussian' ou 'salt_pepper'")
+
+        # Limite les valeurs entre 0 et 255
+        noisy = np.clip(noisy, 0, 255)
+
+        # Retour au format image classique
+        noisy_images.append(noisy.astype(np.uint8))
+
+    return noisy_images
