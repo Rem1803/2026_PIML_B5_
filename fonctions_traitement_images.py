@@ -2,6 +2,13 @@ import numpy as np
 import cv2
 
 
+# PIPELINE OPTIMAL :
+# 1-resize_images
+# 2-rgb_to_grayscale
+# 3-equalize_histogram_CLAHE
+# 4-standardize_image
+
+
 def rgb_to_grayscale(image):
     """
     Convertit une image RGB en niveaux de gris.
@@ -44,7 +51,7 @@ def standardize_image(image):
 
 
 
-def equalize_histogram(image):
+def equalize_histogram_global(image):
     """
     Égalise l'histogramme d'une image en niveaux de gris.
     
@@ -70,7 +77,17 @@ def equalize_histogram(image):
 
 
 
-def resize_images(images, target_size=None):
+def equalize_histogram_CLAHE(image):
+    # Création du CLAHE
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+
+    # Application
+    equalized = clahe.apply(image.astype(np.uint8))
+    return equalized.astype(np.float64)
+
+
+
+def resize_images(images, target_size=(16, 16)):
     """
     Redimensionne une liste d'images pour qu'elles aient toutes
     les mêmes dimensions.
@@ -80,9 +97,7 @@ def resize_images(images, target_size=None):
     images : list
         Liste d'images numpy (grayscale ou RGB)
 
-    target_size : tuple (width, height), optionnel
-        Taille cible.
-        Si None : utilise la taille de la première image.
+    target_size : tuple (width, height), optionnel, Taille cible.
 
     Retour
     ------
@@ -92,11 +107,6 @@ def resize_images(images, target_size=None):
 
     if len(images) == 0:
         return []
-
-    # Taille cible = taille de la première image
-    if target_size is None:
-        h, w = images[0].shape[:2]
-        target_size = (w, h)
 
     resized_images = []
 
@@ -157,9 +167,7 @@ def add_noise(images, noise_type="gaussian", strength=25):
         # Bruit sel / poivre
         # =========================
         elif noise_type == "salt_pepper":
-
             prob = strength
-
             noisy = noisy.copy()
 
             # Pixels blancs
@@ -182,6 +190,9 @@ def add_noise(images, noise_type="gaussian", strength=25):
         noisy = np.clip(noisy, 0, 255)
 
         # Retour au format image classique
-        noisy_images.append(noisy.astype(np.uint8))
+        noisy_images.append(noisy.astype(np.float64))
 
     return noisy_images
+
+
+
