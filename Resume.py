@@ -156,8 +156,8 @@ def afficher_matrice_confusion(mc, classes, normaliser=False, titre='Matrice de 
     format_texte = '.2f' if normaliser else 'd'
     seuil = mc.max() / 2.
     
-    for i in range(nb_lignes):
-        for j in range(nb_colonnes):
+    for i in range(len(mc)):
+        for j in range(len(mc[i])):
             plt.text(j, i, format(mc[i, j], format_texte),
                         horizontalalignment="center",
                         color="white" if mc[i, j] > seuil else "black")
@@ -232,7 +232,7 @@ def courbe_roc(y_vrai, y_scores):
 # Exemples d'utilisation
 # ==========================================
 if __name__ == "__main__":
-    # --- Test des métriques de base ---
+    # --- Test ---
     y_reel = [0, 1, 1, 0, 1]
     y_pred = [0, 1, 0, 0, 1]
     
