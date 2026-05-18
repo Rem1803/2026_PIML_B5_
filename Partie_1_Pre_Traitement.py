@@ -2,12 +2,27 @@ import numpy as np
 from PIL import Image
 from skimage import exposure
 from matplotlib.colors import rgb_to_hsv
+from scipy import ndimage
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max
+from skimage.filters import threshold_otsu
+from skimage.measure import label
+
+
+# PIPELINE OPTIMAL :
+# -1-resize_images
+# -2-RGB_to_HSV
+# -3-HSV_by_HS
+# -4-standardize_images
+
+# DESCRIPTEURS ADDITIONNELS : nb de régions segmentées
+# -watershed_region_count (à utiliser après le pipeline optimal)
 
 # ==============================================================================================
 # Fonctions pour traitement des images 
 # ==============================================================================================
 
-# Plus utilisée
+# Plus d'utilité
 def rgb_to_grayscale(image):
     """
     Convertit une image RGB en niveaux de gris.
@@ -29,7 +44,7 @@ def rgb_to_grayscale(image):
 
 # ============
 
-def standardize_image(images):
+def standardize_images(images):
     """
     Normalise une image en soustrayant la moyenne et en divisant par l'écart type.
     
@@ -54,7 +69,7 @@ def standardize_image(images):
 
 # ============
 
-# Plus utilisée
+# Plus d'utilité
 def equalize_histogram(image):
     """
     Égalise l'histogramme d'une image en niveaux de gris.
@@ -256,3 +271,65 @@ def HSV_by_HS(hsv_images):
         hs_images.append(hs)
 
     return hs_images
+
+# ============
+
+def watershed_region_count(images):
+    """
+    Applique une segmentation Watershed à une liste d'images
+    et retourne le nombre de régions détectées pour chaque image.
+
+    Paramètres
+    ----------
+    images : list[np.ndarray]
+        Liste d'images grayscale (2D).
+
+    Retour
+    -------
+    counts : list[int]
+        counts[i] = nombre de régions détectées
+        sur images[i].
+    """
+
+    counts = []
+
+    for img in images:
+
+        # Conversion float
+        img = img.astype(np.float32)
+
+        # Binarisation automatique (Otsu)
+        thresh = threshold_otsu(img)
+        binary = img > thresh
+
+        # Distance transform
+        distance = ndimage.distance_transform_edt(binary)
+
+        # Détection des marqueurs
+        coords = peak_local_max(
+            distance,
+            footprint=np.ones((3, 3)),
+            labels=binary
+        )
+
+        # Création image des maxima locaux
+        mask = np.zeros(distance.shape, dtype=bool)
+        mask[tuple(coords.T)] = True
+
+        # Labellisation des marqueurs
+        markers, _ = ndimage.label(mask)
+
+        # Watershed
+        labels_ws = watershed(
+            -distance,
+            markers,
+            mask=binary
+        )
+
+        # Nombre de régions
+        n_regions = len(np.unique(labels_ws)) - 1
+        counts.append(n_regions)
+
+    return counts
+
+# ============
