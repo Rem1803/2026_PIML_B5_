@@ -15,7 +15,7 @@ import Partie_1_Pre_Traitement as pre_traitement
 # Chargement des images 
 # ==============================================================================================
 
-def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=200):
+def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=1000):
     """Charge et prétraite les images de deux classes pour l'entraînement.
 
     Args:
@@ -35,7 +35,7 @@ def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=200)
         - Charge d'abord les images non infectées (étiquette 0), puis infectées (étiquette 1).
     """
 
-    data = []
+    images = []
     target = []
 
     for folder, label in [(uninfected, 0), (parasitized, 1)]:
@@ -45,24 +45,26 @@ def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=200)
                 path = os.path.join(folder, filename)
 
                 img = Image.open(path).convert("RGB")
-                arr = np.array(img) / 255.0
-                arr_gray = pre_traitement.rgb_to_grayscale(arr)
+                arr = np.array(img)
 
-                arr_gray = pre_traitement.equalize_histogram(arr_gray * 255.0) / 255.0
-                arr_gray = pre_traitement.standardize_image(arr_gray)
-
-                data.append(arr_gray)
+                images.append(arr)
                 target.append(label)
 
                 count += 1
                 if count == max_per_class:
                     break
 
-    # Redimensionner toutes les images avant de les aplatir
-    resized = pre_traitement.resize_images(data, target_size=image_size)
-    data = np.array([img.flatten() for img in resized])
+    resized_images = pre_traitement.resize_images(images, target_size=image_size)
+    hsv_images = pre_traitement.RGB_to_HSV(resized_images)
+    hs_images = pre_traitement.HSV_by_HS(hsv_images)
+    hs_images = pre_traitement.standardize_image(hs_images)
 
-    return data, np.array(target)
+    data = []
+    for img in hs_images:
+        img = np.asarray(img)
+        data.append(img.flatten())
+
+    return np.array(data), np.array(target)
 
 # ==============================================================================================
 # Modèle simple avec la fonction sigmoïde
