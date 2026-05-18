@@ -6,6 +6,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
+
 def confusion_matrix(y_true, y_pred):
     """
     Compute the confusion matrix for binary classification.
@@ -180,9 +181,10 @@ y_scores = [0.1, 0.4, 0.35, 0.8]
 
 auc_score = roc_auc(y_true, y_scores)
 print(f"ROC AUC Score (NumPy) : {auc_score}")
+
 def roc_curve(y_true, y_scores):
     """
-    Calcule les points (FPR, TPR) de la courbe ROC sans scikit-learn.
+    Calcule les points (FPR, TPR) de la courbe ROC.
     """
     y_true = np.asarray(y_true)
     y_scores = np.asarray(y_scores)
@@ -222,18 +224,16 @@ def roc_curve(y_true, y_scores):
             
     return np.array(fpr_list), np.array(tpr_list), np.array(thresholds)
 
-# --- Exemple d'utilisation avec ton plot ---
+# --- Exemple d'utilisation ---
 y_true = [0, 0, 1, 1]
 y_scores = [0.1, 0.4, 0.35, 0.8]
 
-# On utilise notre fonction maison à la place de scikit-learn
 fpr, tpr, thresholds = roc_curve(y_true, y_scores)
 
-# On calcule l'AUC (en réutilisant la logique d'avant, ou la méthode mathématique des trapèzes)
-# Pour simplifier l'affichage ici, on utilise numpy.trapz qui calcule l'aire sous une courbe
+# On calcule l'AUC à partir des points de la courbe ROC en utilisant la règle du trapèze (trapezoidal rule)
 auc_score = np.trapezoid(tpr, fpr)
 
-# Affichage (identique à ton code)
+# Affichage de la courbe ROC
 plt.figure()
 plt.plot(fpr, tpr, color='blue', lw=2, label=f'Courbe ROC (AUC = {auc_score:.2f})')
 plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--') # La diagonale du hasard
