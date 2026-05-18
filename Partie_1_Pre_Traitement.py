@@ -1,8 +1,6 @@
-import numpy as np 
-import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
-import os
-import cv2 as cv2
+from skimage import exposure
 
 # ==============================================================================================
 # Fonctions pour traitement des images 
@@ -75,45 +73,86 @@ def equalize_histogram(image):
     return equalized_image.reshape(image.shape).astype(np.float64)
 
 
-def equalize_histogram_CLAHE(image):
-    # Création du CLAHE
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+def equalize_histogram_CLAHE(images, clip_limit=0.01, nbins=256):
+    """
+    Applique CLAHE à une liste d'images.
 
-    # Application
-    equalized = clahe.apply(image.astype(np.uint8))
-    return equalized.astype(np.float64)
+    Paramètres
+    ----------
+    images : list
+        Liste d'images numpy grayscale
+
+    clip_limit : float
+        Limitation du contraste
+
+    nbins : int
+        Nombre de bins histogramme
+
+    Retour
+    ------
+    equalized_images : list
+    """
+
+    equalized_images = []
+
+    for img in images:
+
+        # Conversion float [0,1]
+        img_float = img.astype(np.float32) / 255.0
+
+        # =========================
+        # Image grayscale
+        # =========================
+        if img.ndim == 2:
+
+            eq = exposure.equalize_adapthist(img_float, clip_limit=clip_limit, nbins=nbins)
+
+        else:
+            raise ValueError("Format d'image non supporté")
+
+        # Retour
+        eq_uint8 = (eq * 255).astype(np.uint8)
+
+        equalized_images.append(eq_uint8)
+
+    return equalized_images
 
 
 
 def resize_images(images, target_size=(16, 16)):
     """
-    Redimensionne une liste d'images pour qu'elles aient toutes
-    les mêmes dimensions.
+    Redimensionne une liste d'images avec PIL.
 
     Paramètres
     ----------
     images : list
-        Liste d'images numpy (grayscale ou RGB)
+        Liste d'images numpy
 
-    target_size : tuple (width, height), optionnel, Taille cible.
+    target_size : tuple (width, height)
+        Taille cible.
+        Si None : utilise la taille de la première image.
 
     Retour
     ------
     resized_images : list
-        Liste des images redimensionnées
     """
-
-    if len(images) == 0:
-        return []
 
     resized_images = []
 
     for img in images:
-        resized = cv2.resize(
-            img,
+
+        # Conversion numpy -> PIL
+        pil_img = Image.fromarray(img)
+
+        # Resize
+        resized_pil = pil_img.resize(
             target_size,
-            interpolation=cv2.INTER_AREA
+            Image.Resampling.LANCZOS
         )
+
+        # Retour PIL -> numpy
+        resized = np.array(resized_pil)
+
         resized_images.append(resized)
 
     return resized_images

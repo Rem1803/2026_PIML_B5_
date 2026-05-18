@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import os
+from Partie_1_Pre_Traitement import *
 
 def load_images(uninfected, parasitized, image_size=(16,16), max_per_class=200):
     data = []
@@ -589,3 +590,23 @@ def cross_validation(data, target,train_func, predict_func,  n_folds=5, learning
 
     print(f"\nAccuracy moyenne: {np.mean(accuracies):.4f}")
     return {'accuracies': accuracies, 'mean': np.mean(accuracies), 'w': w, 'b': b, 'losses': losses}
+
+# ==========================================
+# Visualisation de l'évolution de la loss
+# ==========================================
+
+def plot_losses(losses, title="Evolution de la loss"):
+    """
+    Affiche le graphique de l'évolution de la loss.
+    
+    Parameters:
+    losses (list): Liste des losses pour chaque époque.
+    title (str): Titre du graphique.
+    """
+    plt.figure(figsize=(10, 5))
+    plt.plot(losses)
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.show()
