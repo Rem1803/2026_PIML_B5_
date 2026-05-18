@@ -2,9 +2,10 @@ Projet PIML
 
 
 ==================
-    Objectif :
+    Objectifs :
 ==================
-
+Le projet consiste en l'implémentation d'un workflow pour classer des images de cellules.
+Le but est de différencier les cellules saines et les cellules infectées par la malaria.
 
 ================================
     Présentation des datas :
