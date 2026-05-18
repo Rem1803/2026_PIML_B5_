@@ -220,6 +220,7 @@ def mlp_fit(data, target, n_epochs=10, hidden_layer_sizes=[3,2], learning_rate=0
 
     w, b = init_parameters(n_feats, hidden_layer_sizes, rng)
     
+    losses = []
 
     for epoch in range(n_epochs):
         err = [None] * (L+1)
@@ -243,9 +244,11 @@ def mlp_fit(data, target, n_epochs=10, hidden_layer_sizes=[3,2], learning_rate=0
                 w[l] -= learning_rate * dw
                 b[l] -= learning_rate * err[l]
 
+        loss = mlp_error(data, target, w, b)
+        losses.append(loss)
     # end for epoch
     
-    return w, b
+    return w, b, losses
 
 # ==============================================================================================
 # Calcul des prédictions
@@ -560,6 +563,8 @@ def mlp_fit_minibatch(data, target, n_epochs=10, hidden_layer_sizes=[3,2],
 
     w, b = init_parameters(n_feats, hidden_layer_sizes, rng)
 
+    losses = []
+
     for epoch in range(n_epochs):
         indices = rng.permutation(n_objs)
 
@@ -590,7 +595,11 @@ def mlp_fit_minibatch(data, target, n_epochs=10, hidden_layer_sizes=[3,2],
                 w[l] -= learning_rate * grad_w[l] / current_batch_size
                 b[l] -= learning_rate * grad_b[l] / current_batch_size
 
-    return w, b
+            loss = mlp_error(data, target, w, b)
+            losses.append(loss)
+
+    return w, b, losses
+    
 
     
 # ==========================================
@@ -606,6 +615,51 @@ def load_model(filename):
     w = list(params["w"])
     b = list(params["b"])
     return w, b
+
+# ==========================================
+# Cross-validation
+# ==========================================
+
+def cross_validation(data, target,train_func, predict_func,  n_folds=5, learning_rate=0.001, random_state=42):
+    indices = np.arange(len(data))
+    np.random.seed(random_state) #pour la reproductibilité
+    np.random.shuffle(indices)
+
+    folds = np.array_split(indices, n_folds)
+
+    accuracies = []
+
+    for k in range(n_folds):
+
+        print(f"\n===== Fold {k+1} =====")
+
+        # fold de test
+        test_idx = folds[k]
+
+        # folds d'entraînement
+        train_idx = np.concatenate(
+            [folds[i] for i in range(n_folds) if i != k]
+        )
+
+        # séparation des données
+        X_train = data[train_idx]
+        y_train = target[train_idx]
+
+        X_test = data[test_idx]
+        y_test = target[test_idx]
+
+        result = train_func(X_train, y_train, n_epochs=20, hidden_layer_sizes=[16, 8], learning_rate=learning_rate, random_state=random_state)
+
+        w,b,losses = result
+        correct = sum(predict_func(X_test[i], w, b) == y_test[i] for i in range(len(X_test)))
+        accuracy = correct / len(X_test)
+        accuracies.append(accuracy)
+        print(f"Accuracy: {accuracy:.4f}")
+
+        accuracies.append(accuracy)
+
+    print(f"\nAccuracy moyenne: {np.mean(accuracies):.4f}")
+    return {'accuracies': accuracies, 'mean': np.mean(accuracies), 'w': w, 'b': b, 'losses': losses}
 
 # ==========================================
 # Évaluation des performances
