@@ -1,11 +1,13 @@
 import numpy as np
 from PIL import Image
 from skimage import exposure
+from matplotlib.colors import rgb_to_hsv
 
 # ==============================================================================================
 # Fonctions pour traitement des images 
 # ==============================================================================================
 
+# Plus utilisée
 def rgb_to_grayscale(image):
     """
     Convertit une image RGB en niveaux de gris.
@@ -25,9 +27,9 @@ def rgb_to_grayscale(image):
     
     return grayscale.astype(np.float64)
 
+# ============
 
-
-def standardize_image(image):
+def standardize_image(images):
     """
     Normalise une image en soustrayant la moyenne et en divisant par l'écart type.
     
@@ -37,17 +39,22 @@ def standardize_image(image):
     Returns:
     numpy.ndarray: Image normalisée.
     """
-    mean = np.mean(image)
-    std = np.std(image)
-    
-    if std == 0:
-        return image - mean  # Éviter la division par zéro
-    
-    standardized_image = (image - mean) / std
-    return standardized_image
+    standardized_images = []
+    for img in images:
 
+        mean = np.mean(img)
+        std = np.std(img)
 
+        if std == 0:
+            standardized_images.append(img - mean)
+        else:
+            standardized_images.append((img - mean) / std)
 
+    return standardized_images
+
+# ============
+
+# Plus utilisée
 def equalize_histogram(image):
     """
     Égalise l'histogramme d'une image en niveaux de gris.
@@ -72,52 +79,7 @@ def equalize_histogram(image):
     
     return equalized_image.reshape(image.shape).astype(np.float64)
 
-
-def equalize_histogram_CLAHE(images, clip_limit=0.01, nbins=256):
-    """
-    Applique CLAHE à une liste d'images.
-
-    Paramètres
-    ----------
-    images : list
-        Liste d'images numpy grayscale
-
-    clip_limit : float
-        Limitation du contraste
-
-    nbins : int
-        Nombre de bins histogramme
-
-    Retour
-    ------
-    equalized_images : list
-    """
-
-    equalized_images = []
-
-    for img in images:
-
-        # Conversion float [0,1]
-        img_float = img.astype(np.float32) / 255.0
-
-        # =========================
-        # Image grayscale
-        # =========================
-        if img.ndim == 2:
-
-            eq = exposure.equalize_adapthist(img_float, clip_limit=clip_limit, nbins=nbins)
-
-        else:
-            raise ValueError("Format d'image non supporté")
-
-        # Retour
-        eq_uint8 = (eq * 255).astype(np.uint8)
-
-        equalized_images.append(eq_uint8)
-
-    return equalized_images
-
-
+# ============
 
 def resize_images(images, target_size=(16, 16)):
     """
@@ -157,7 +119,7 @@ def resize_images(images, target_size=(16, 16)):
 
     return resized_images
 
-
+# ============
 
 def add_noise(images, noise_type="gaussian", strength=25):
     """
@@ -230,3 +192,67 @@ def add_noise(images, noise_type="gaussian", strength=25):
         noisy_images.append(noisy.astype(np.float64))
 
     return noisy_images
+
+# ============
+
+def RGB_to_HSV(images):
+    """
+    Convertit une liste d'images RGB en HSV.
+
+    Paramètres
+    ----------
+    images : list
+        Liste d'images RGB numpy uint8
+
+    Retour
+    ------
+    hsv_images : list
+        Liste d'images HSV
+        H,S,V dans [0,1]
+    """
+
+    hsv_images = []
+
+    for img in images:
+
+        # Conversion en float [0,1]
+        img_float = img.astype(np.float32) / 255.0
+
+        # RGB -> HSV
+        hsv = rgb_to_hsv(img_float)
+
+        hsv_images.append(hsv)
+
+    return hsv_images
+
+# ============
+
+def HSV_by_HS(hsv_images):
+    """
+    Remplace chaque pixel HSV (H,S,V)
+    par la valeur H*S.
+
+    Paramètres
+    ----------
+    hsv_images : list
+        Liste d'images HSV
+
+    Retour
+    ------
+    hs_images : list
+        Liste d'images 2D
+    """
+
+    hs_images = []
+
+    for hsv in hsv_images:
+
+        H = hsv[:, :, 0]
+        S = hsv[:, :, 1]
+
+        # Produit H*S
+        hs = H * S
+
+        hs_images.append(hs)
+
+    return hs_images

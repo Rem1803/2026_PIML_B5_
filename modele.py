@@ -606,7 +606,26 @@ def mlp_fit_minibatch(data, target, n_epochs=10, hidden_layer_sizes=[3,2],
 # Sauvegarder et charger les modèles
 # ==========================================  
 
-def save_model(filename, w, b):
+def save_model(model_or_filename, w=None, b=None):
+    """Save model weights and biases to a file.
+
+    Supports both calling styles:
+      save_model(filename, w, b)
+      save_model(model_dict, filename)
+    """
+    if isinstance(model_or_filename, dict):
+        model_dict = model_or_filename
+        if w is None:
+            raise ValueError("save_model(model_dict, filename) requires a filename argument")
+        filename = w
+        w = model_dict.get("w")
+        b = model_dict.get("b")
+    else:
+        filename = model_or_filename
+
+    if w is None or b is None:
+        raise ValueError("save_model(filename, w, b) requires both w and b")
+
     np.savez(filename, w=np.array(w, dtype=object), b=np.array(b, dtype=object))
 
 
