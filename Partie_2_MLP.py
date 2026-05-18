@@ -324,9 +324,8 @@ def mlp_fit_relu(data, target, n_epochs=100, hidden_layer_sizes=[3,2], learning_
                 w[l] -= learning_rate * dw
                 b[l] -= learning_rate * err[l]
 
-        loss = mlp_error(data, target, w, b)
+        loss = mlp_error_relu(data, target, w, b)
         losses.append(loss)
-                            
             
                      
         
@@ -487,6 +486,8 @@ def mlp_fit_dropout(data, target, n_epochs=10, hidden_layer_sizes=[3,2], learnin
             #Backpropagation in hidden layers 
             for l in range(L-1,0,-1):
                 da = (a[l]>0).astype(float)
+                if masks[l] is not None:
+                    da = da * masks[l] / (1 - 0.2)
                 err_next = err[l+1]
                 err_l = np.matmul(w[l+1].T, err_next)*da
                 err[l] = err_l
@@ -655,7 +656,9 @@ def load_model(filename):
 # Cross-validation
 # ==========================================
 
-def cross_validation(data, target,train_func, predict_func,  n_folds=5, n_epochs=20, learning_rate=0.001, random_state=42):
+def cross_validation(data, target, train_func, predict_func, n_folds=5,
+                     n_epochs=20, learning_rate=0.001, random_state=42,
+                     hidden_layer_sizes=[32, 16], verbose=True, **train_kwargs):
     indices = np.arange(len(data))
     np.random.seed(random_state) #pour la reproductibilité
     np.random.shuffle(indices)
@@ -666,7 +669,8 @@ def cross_validation(data, target,train_func, predict_func,  n_folds=5, n_epochs
 
     for k in range(n_folds):
 
-        print(f"\n===== Fold {k+1} =====")
+        if verbose:
+            print(f"\n===== Fold {k+1} =====")
 
         # fold de test
         test_idx = folds[k]
@@ -683,16 +687,77 @@ def cross_validation(data, target,train_func, predict_func,  n_folds=5, n_epochs
         X_test = data[test_idx]
         y_test = target[test_idx]
 
-        result = train_func(X_train, y_train, n_epochs=n_epochs, hidden_layer_sizes=[16, 8], learning_rate=learning_rate, random_state=random_state)
+        result = train_func(
+            X_train,
+            y_train,
+            n_epochs=n_epochs,
+            hidden_layer_sizes=hidden_layer_sizes,
+            learning_rate=learning_rate,
+            random_state=random_state,
+            **train_kwargs
+        )
 
         w,b,losses = result
         correct = sum(predict_func(X_test[i], w, b) == y_test[i] for i in range(len(X_test)))
         accuracy = correct / len(X_test)
         accuracies.append(accuracy)
-        print(f"Accuracy: {accuracy:.4f}")
+        if verbose:
+            print(f"Accuracy: {accuracy:.4f}")
 
-    print(f"\nAccuracy moyenne: {np.mean(accuracies):.4f}")
+    if verbose:
+        print(f"\nAccuracy moyenne: {np.mean(accuracies):.4f}")
     return {'accuracies': accuracies, 'mean': np.mean(accuracies), 'w': w, 'b': b, 'losses': losses}
+
+
+def grid_search_hyperparameters(data, target, train_func, predict_func,
+                                learning_rates, n_epochs_values,
+                                n_folds=5, random_state=42,
+                                hidden_layer_sizes=[16, 8],
+                                verbose=False,
+                                **train_kwargs):
+    """
+    Teste plusieurs learning rates et nombres d'epochs avec validation croisee.
+    Retourne le meilleur couple et tous les resultats.
+    """
+    results = []
+    best_result = None
+
+    for learning_rate in learning_rates:
+        for n_epochs in n_epochs_values:
+            if verbose:
+                print(f"Test learning_rate={learning_rate}, n_epochs={n_epochs}")
+        
+            cv_result = cross_validation(
+                data,
+                target,
+                train_func=train_func,
+                predict_func=predict_func,
+                n_folds=n_folds,
+                n_epochs=n_epochs,
+                learning_rate=learning_rate,
+                random_state=random_state,
+                hidden_layer_sizes=hidden_layer_sizes,
+                verbose=verbose,
+                **train_kwargs
+            )
+
+            result = {
+                "learning_rate": learning_rate,
+                "n_epochs": n_epochs,
+                "mean_accuracy": cv_result["mean"],
+                "accuracies": cv_result["accuracies"]
+            }
+            results.append(result)
+
+            if best_result is None or result["mean_accuracy"] > best_result["mean_accuracy"]:
+                best_result = result
+
+    print("Meilleurs hyperparametres")
+    print(f"learning_rate: {best_result['learning_rate']}")
+    print(f"n_epochs: {best_result['n_epochs']}")
+    print(f"accuracy moyenne: {best_result['mean_accuracy']:.4f}")
+
+    return best_result, results
 
 # ==========================================
 # Visualisation de l'évolution de la loss
