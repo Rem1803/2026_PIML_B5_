@@ -82,22 +82,14 @@ def equalize_histogram(image):
 # ==========================================
 
 def matrice_confusion(y_vrai, y_predit):
-    """
-    Calcule la matrice de confusion pour une classification binaire.
-
-    Paramètres :
-    y_vrai (list) : Étiquettes réelles (0 ou 1).
-    y_predit (list) : Étiquettes prédites (0 ou 1).
-
-    Retourne :
-    dict : Dictionnaire contenant les Vrais Positifs (VP), Vrais Négatifs (VN),
-           Faux Positifs (FP) et Faux Négatifs (FN).
-    """
-    vp = sum((y_vrai[i] == 1 and y_predit[i] == 1) for i in range(len(y_vrai)))
-    vn = sum((y_vrai[i] == 0 and y_predit[i] == 0) for i in range(len(y_vrai)))
-    fp = sum((y_vrai[i] == 0 and y_predit[i] == 1) for i in range(len(y_vrai)))
-    fn = sum((y_vrai[i] == 1 and y_predit[i] == 0) for i in range(len(y_vrai)))
-
+    y_vrai = np.asarray(y_vrai)
+    y_predit = np.asarray(y_predit)
+    
+    vp = np.sum((y_vrai == 1) & (y_predit == 1))
+    vn = np.sum((y_vrai == 0) & (y_predit == 0))
+    fp = np.sum((y_vrai == 0) & (y_predit == 1))
+    fn = np.sum((y_vrai == 1) & (y_predit == 0))
+    
     return {'VP': vp, 'VN': vn, 'FP': fp, 'FN': fn}
 
 def exactitude(matrice_conf):
