@@ -81,7 +81,7 @@ def equalize_histogram(image):
 
 # ============
 
-def resize_images(images, target_size=(16, 16)):
+def resize_images(images, target_size=(32, 32)):
     """
     Redimensionne une liste d'images avec PIL.
 
