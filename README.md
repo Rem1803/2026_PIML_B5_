@@ -1,0 +1,59 @@
+Projet PIML
+
+
+==================
+    Objectifs :
+==================
+Le projet consiste en l'implémentation d'un workflow pour classer des images de cellules.
+Le but est de différencier les cellules saines et les cellules infectées par la malaria.
+
+================================
+    Présentation des datas :
+================================
+(source, taille, contexte)
+
+Les données sur lesquelles nous travaillons sont issues du "Malaria Cell Image Dataset", qui a été publié il y a 7 ans sur la plateforme Kaggle.
+Lien : https://www.kaggle.com/datasets/iarunava/cell-images-for-detecting-malaria/data
+
+Kaggle est une plateforme collaborative d'échanges, de publications et de cours sur les Data Sciences.
+Le dataset pèse 350.95 MB et est composé de 27558 images RGB, séparées équitablement en deux dossiers : "Infected" et "Uninfected"
+
+Chaque image consiste en une seule cellule, découpée d'une vue microscope plus large.
+Les échantillons de cellules ont été récupérés sur des patients humains par frottis sanguins.
+A première vue, les cellules du dossier infectées par la Malaria se différencient visuellement des cellules saines parla présence d'une ou plusieurs tâches violettes.
+
+Pour des raisons d'espace de stockage Git et de rapidité d'exécution, nous n'utiliserons que 2000 éléments de notre dataset (1000 de chaque dossier)
+
+===================================================
+    Aperçu du workflow / intuition du processus
+===================================================
+(les différentes étapes : input, output, process...)
+
+Le workflow que nous avons implémenté se sépare en 3 grandes parties :
+- pré-traitement des images et descripteurs
+- modèle de réseau de neurones
+- évaluation et interprétabilité
+
+La première partie a pour but de transformer les images du dataset utilisé pour s'assurer qu'elles soient utilisable de façon optimisée par le réseau de neurones.
+Les images sont ainsi redimensionnées pour être du même format, puis convertie en niveau d'intensité de couleur pour supprimer le paramètre "luminosité du microscope" ; elles sont enfin normalisées.
+Des descripteurs alternatifs sont également calculés sur chaque image pour aider le réseau de neurones à différencier les cellules :
+- la variance de l'image
+- la proportion de violet de l'image
+- la moyenne de la saturation de l'image
+- le nombre de régions détecté après segmentation Watershed de l'image
+
+La deuxième partie a pour but de
+
+La troisième partie a pour but de 
+
+=====================================
+    Instructions d'installation :
+=====================================
+(qu'est-ce que ça nécessite ? Peut-il tourner sur Linux VM)
+
+
+===================================
+    Comment exécuter une démo :
+===================================
+(moins de 10min de temps d'éxécution sur Linux VM)
+
