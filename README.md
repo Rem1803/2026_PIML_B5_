@@ -70,5 +70,17 @@ Une fois cela fait, il faut télécharger l'intégralité des fichiers présents
 (moins de 10min de temps d'éxécution sur Linux VM)
 
 - Ouvrir le fichier modèle.ipynb dans un logiciel capable de gérer et exécuter un Notebook python.
-- Exécuter la première cellule de code pour importer les librairies nécessaires
-- Exécuter la deuxième cellule de code pour charger le dataset utilisé
+
+- Exécuter la 1ère cellule de code pour importer les librairies nécessaires
+
+- Exécuter les 2e et 3e cellules de code pour charger le dataset utilisé et afficher quelque exemples d'images de cellules saines et infectées par la malaria
+
+- Exécuter les 4e, 5e et 6e cellules de code pour faire tourner le modèle simple de MLP et afficher les résulats (précision, perte, ...)
+
+- Exécuter les 7e, 8e et 9e cellules de code pour faire tourner le modème MLP avec ReLU et afficher les résultats (précision, perte, ...)
+
+- Exécuter les 10e, 11e et 12e cellules de code pour faire tourner le modème MLP avec Binary Cross Entropy et afficher les résultats (précision, perte, ...)
+
+- Exécuter les 13e, 14e et 15e cellules de code pour faire tourner le modème MLP avec DropOut et afficher les résultats (précision, perte, ...)
+
+- Exécuter les 16e, 17e et 18e cellules de code pour faire tourner le modème MLP avec mini-Batch gradient et afficher les résultats (précision, perte, ...)
