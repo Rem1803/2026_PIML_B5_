@@ -179,6 +179,18 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     
     return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
 
+def transformer_image_en_features(chemin_image, image_size):
+    """Ouvre une image et la transforme en un vecteur prêt pour le réseau de neurones."""
+    img = Image.open(chemin_image).convert("RGB")
+    img_resized = img.resize(image_size)
+    arr_rgb = np.array(img_resized) / 255.0
+    arr_hsv = rgb_to_hsv(arr_rgb)
+    
+    advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
+    arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
+    
+    combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
+    return combined_features
 
 def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
     data = []
@@ -189,14 +201,7 @@ def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_pe
         for filename in os.listdir(folder_path):
             if filename.endswith(".png"):
                 path = os.path.join(folder_path, filename)
-                img = Image.open(path).convert("RGB").resize(image_size)
-                arr_rgb = np.array(img) / 255.0 
-                
-                arr_hsv = rgb_to_hsv(arr_rgb)
-                advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
-                arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
-                
-                combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
+                combined_features = transformer_image_en_features(path, image_size)
                 data.append(combined_features)
                 target.append(label)
 
@@ -430,29 +435,13 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, image_siz
         print(f"Erreur : Le fichier {image_path} n'existe pas.")
         return
 
-    # 1. Charger l'image originale pour l'affichage visuel
     img_originale = Image.open(image_path).convert("RGB")
-    
-    # 2. Appliquer EXACTEMENT le même pré-traitement que le pipeline
-    img_resized = img_originale.resize(image_size)
-    arr_rgb = np.array(img_resized) / 255.0
-    arr_hsv = rgb_to_hsv(arr_rgb)
-    
-    # Extraction des caractéristiques expertes
-    advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
-    arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
-    
-    # Combinaison des descripteurs
-    combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
-    
-    # 3. Normalisation OBLIGATOIRE avec les statistiques de l'entraînement
+    combined_features = transformer_image_en_features(image_path, image_size)
     combined_features_scaled = (combined_features - mean_train) / std_train
-    
-    # 4. Passer l'image dans le réseau de neurones
+
     proba = predict_proba_relu(combined_features_scaled, w, b)
     prediction = 1 if proba >= seuil else 0
     
-    # 5. Visualisation graphique du résultat
     plt.figure(figsize=(6, 6))
     plt.imshow(img_originale)
     plt.axis('off')
@@ -504,14 +493,7 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, image_size
         
         try:
             # 1. Pipeline de pré-traitement (Silencieux)
-            img = Image.open(path_in).convert("RGB")
-            img_resized = img.resize(image_size)
-            arr_rgb = np.array(img_resized) / 255.0
-            arr_hsv = rgb_to_hsv(arr_rgb)
-            
-            advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
-            arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
-            combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
+            combined_features = transformer_image_en_features(path_in, image_size)
             
             # Normalisation avec les stats du modèle
             features_scaled = (combined_features - mean_train) / std_train
