@@ -7,6 +7,7 @@ from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
 from skimage.measure import label
+import scipy.stats as stats
 
 
 # PIPELINE OPTIMAL :
@@ -242,37 +243,6 @@ def RGB_to_HSV(images):
 
 # ============
 
-def HSV_by_HS(hsv_images):
-    """
-    Remplace chaque pixel HSV (H,S,V)
-    par la valeur H*S.
-
-    Paramètres
-    ----------
-    hsv_images : list
-        Liste d'images HSV
-
-    Retour
-    ------
-    hs_images : list
-        Liste d'images 2D
-    """
-
-    hs_images = []
-
-    for hsv in hsv_images:
-
-        H = hsv[:, :, 0]
-        S = hsv[:, :, 1]
-
-        # Produit H*S
-        hs = H * S
-
-        hs_images.append(hs)
-
-    return hs_images
-
-# ============
 
 def watershed_region_count(images):
     """
@@ -333,3 +303,18 @@ def watershed_region_count(images):
     return counts
 
 # ============
+
+def extract_advanced_features(arr_rgb, arr_hsv):
+    hue = arr_hsv[:, :, 0]
+    saturation = arr_hsv[:, :, 1]
+    blue_channel = arr_rgb[:, :, 2]
+    
+    variance = np.var(blue_channel)
+    purple_mask = (hue > 0.75) & (hue < 0.95)
+    purple_proportion = np.mean(purple_mask) 
+    mean_saturation = np.mean(saturation)
+    
+    hist, _ = np.histogram(blue_channel.flatten(), bins=256, range=(0, 1))
+    entropy = stats.entropy(hist + 1e-9) 
+    skewness = stats.skew(blue_channel.flatten())
+    kurtosis = stats.kurtosis(blue_channel.flatten())
