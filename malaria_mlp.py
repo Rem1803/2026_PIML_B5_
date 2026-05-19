@@ -111,22 +111,27 @@ def plot_class_balance(uninfected_dir, parasitized_dir):
     plt.show()
 
 def plot_advanced_eda(data, target):
+    mean_data = np.mean(data, axis=0)
+    std_data = np.std(data, axis=0)
+    std_data[std_data == 0] = 1 # Sécurité pour éviter la division par zéro
+    
+    data_scaled = (data - mean_data) / std_data
+    
     pca = PCA(n_components=2)
-    data_pca = pca.fit_transform(data)
+    data_pca = pca.fit_transform(data_scaled)
     
     pca_saines = data_pca[target == 0]
     pca_infectees = data_pca[target == 1]
     
     plt.figure(figsize=(8, 6))
-    plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none')
-    plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none')
+    plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none', color='green')
+    plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none', color='red')
     plt.title("Projection PCA (Espace à 2 Dimensions)")
     plt.xlabel(f"Composante Principale 1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
     plt.ylabel(f"Composante Principale 2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
     plt.legend()
     plt.tight_layout()
     plt.show()
-
 
 # ==============================================================================================
 # Etape 3 : Pipeline de Données et Extraction de Caractéristiques Avancées
@@ -149,11 +154,6 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     
     return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis])
 
-def global_standardize(X):
-    mean_global = np.mean(X, axis=0)
-    std_global = np.std(X, axis=0)
-    std_global[std_global == 0] = 1 
-    return (X - mean_global) / std_global
 
 def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
     data = []
@@ -184,8 +184,7 @@ def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_pe
     X_brut = np.array(data)
     y = np.array(target)
     
-    X_final = global_standardize(X_brut)
-    return X_final, y
+    return X_brut, y
 
 
 # ==============================================================================================
@@ -321,6 +320,13 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         X_train, y_train = data[train_idx], target[train_idx]
         X_test, y_test = data[test_idx], target[test_idx]
 
+        mean_train = np.mean(X_train, axis=0)
+        std_train = np.std(X_train, axis=0)
+        std_train[std_train == 0] = 1 
+        
+        X_train = (X_train - mean_train) / std_train
+        X_test = (X_test - mean_train) / std_train
+
         w, b, losses = train_func(X_train, y_train, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16], 
                                   learning_rate=learning_rate, batch_size=BATCH_SIZE, random_state=random_state)
 
@@ -380,9 +386,9 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # PHASE 1 : Exploration visuelle brute
     # ---------------------------------------------------------
-    # print("1. Génération des graphiques EDA...")
-    # plot_image_grid(UNINFECTED_PATH, PARASITIZED_PATH)
-    # plot_color_histograms(UNINFECTED_PATH, PARASITIZED_PATH)
+    print("1. Génération des graphiques EDA...")
+    plot_image_grid(UNINFECTED_PATH, PARASITIZED_PATH)
+    plot_color_histograms(UNINFECTED_PATH, PARASITIZED_PATH)
     
     # ---------------------------------------------------------
     # PHASE 2 : Préparation des données pour le Modèle
