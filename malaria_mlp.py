@@ -158,7 +158,26 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     skewness = stats.skew(blue_channel.flatten())
     kurtosis = stats.kurtosis(blue_channel.flatten())
     
-    return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis])
+    # --- Analyse de la Texture (Filtre de Sobel) ---
+    # 1. Conversion en niveaux de gris
+    gray = np.mean(arr_rgb, axis=2)
+    
+    # 2. On ajoute une bordure virtuelle (padding) pour pouvoir calculer les bords
+    p = np.pad(gray, 1, mode='edge')
+    
+    # 3. Convolution avec les noyaux de Sobel pour détecter les bords verticaux et horizontaux
+    # Détection des lignes verticales (Noyau Sobel X)
+    gx = (p[:-2, 2:] - p[:-2, :-2]) + 2 * (p[1:-1, 2:] - p[1:-1, :-2]) + (p[2:, 2:] - p[2:, :-2])
+    
+    # Détection des lignes horizontales (Noyau Sobel Y)
+    gy = (p[:-2, :-2] - p[2:, :-2]) + 2 * (p[:-2, 1:-1] - p[2:, 1:-1]) + (p[:-2, 2:] - p[2:, 2:])
+    
+    gradient_mag = np.sqrt(gx**2 + gy**2)
+    
+    mean_gradient = np.mean(gradient_mag)
+    std_gradient = np.std(gradient_mag)
+    
+    return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
 
 
 def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
