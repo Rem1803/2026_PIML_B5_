@@ -229,35 +229,38 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
 def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False):
     L = len(w) - 1
     a = [np.copy(x)] 
+    masks = [None]
 
     for l in range(1, L+1):
         z_l = np.matmul(w[l], a[l-1]) + b[l]
         if l == L:
-            a_l = sigmoid(z_l)   # Sortie (Jamais de dropout sur la sortie)
+            a_l = sigmoid(z_l)  
+            mask = None
         else:
-            a_l = relu(z_l)      # Couches cachées
+            a_l = relu(z_l)      
             
-            # --- AJOUT DU DROPOUT (Inverted Dropout) ---
             if training and dropout_rate > 0.0:
-                # Crée un masque 0/1 (désactive 'dropout_rate'% des neurones)
                 mask = (np.random.rand(*a_l.shape) > dropout_rate).astype(float)
-                # On applique le masque et on compense l'échelle
                 a_l = (a_l * mask) / (1.0 - dropout_rate)
+            else:
+                mask = None
                 
         a.append(a_l)
-    return a
+        masks.append(mask)
+        
+    return a, masks
 
 def mlp_error_entropy(data, target, w, b):
     '''Binary Cross Entropy Globale'''
     E = 0
     epsilon = 1e-15
     for x in range(len(data)):
-        a = eval_forward_relu(data[x], w, b)
+        a, _ = eval_forward_relu(data[x], w, b) # <-- MODIF ICI (a, _)
         pred = np.clip(a[-1][0], epsilon, 1 - epsilon)
         y = target[x]
         e = - (y * np.log(pred) + (1-y) * np.log(1-pred))
         E += e
-    return E / len(data) # Moyenne de la loss
+    return E / len(data)
 
 def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 8],
                              learning_rate=0.01, batch_size=32, random_state=42, dropout_rate=0.2): # <-- Ajout ici
