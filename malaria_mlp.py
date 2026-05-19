@@ -111,22 +111,27 @@ def plot_class_balance(uninfected_dir, parasitized_dir):
     plt.show()
 
 def plot_advanced_eda(data, target):
+    mean_data = np.mean(data, axis=0)
+    std_data = np.std(data, axis=0)
+    std_data[std_data == 0] = 1 # Sécurité pour éviter la division par zéro
+    
+    data_scaled = (data - mean_data) / std_data
+    
     pca = PCA(n_components=2)
-    data_pca = pca.fit_transform(data)
+    data_pca = pca.fit_transform(data_scaled)
     
     pca_saines = data_pca[target == 0]
     pca_infectees = data_pca[target == 1]
     
     plt.figure(figsize=(8, 6))
-    plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none')
-    plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none')
+    plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none', color='green')
+    plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none', color='red')
     plt.title("Projection PCA (Espace à 2 Dimensions)")
     plt.xlabel(f"Composante Principale 1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
     plt.ylabel(f"Composante Principale 2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
     plt.legend()
     plt.tight_layout()
     plt.show()
-
 
 # ==============================================================================================
 # Etape 3 : Pipeline de Données et Extraction de Caractéristiques Avancées
@@ -381,9 +386,9 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # PHASE 1 : Exploration visuelle brute
     # ---------------------------------------------------------
-    # print("1. Génération des graphiques EDA...")
-    # plot_image_grid(UNINFECTED_PATH, PARASITIZED_PATH)
-    # plot_color_histograms(UNINFECTED_PATH, PARASITIZED_PATH)
+    print("1. Génération des graphiques EDA...")
+    plot_image_grid(UNINFECTED_PATH, PARASITIZED_PATH)
+    plot_color_histograms(UNINFECTED_PATH, PARASITIZED_PATH)
     
     # ---------------------------------------------------------
     # PHASE 2 : Préparation des données pour le Modèle
