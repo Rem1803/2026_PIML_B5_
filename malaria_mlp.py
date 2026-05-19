@@ -17,7 +17,7 @@ MAX_IMAGES = 1000           # Nombre d'images max à charger par classe
 TAUX_APPRENTISSAGE = 0.01  
 BATCH_SIZE = 32
 EPOCHS = 40
-SEUIL_DECISION = 0.35  # Seuil de classification (ajustable pour optimiser précision/rappel)
+SEUIL_DECISION = 0.5  # Seuil de classification (ajustable pour optimiser précision/rappel)
 
 # Chemins des dossiers (à adapter si besoin)
 UNINFECTED_PATH = r"C:\Users\noevm\Documents\INSA_Lyon\3A_2025-2026\S2\UE3_PIML\Projet\cell_images\Uninfected"
