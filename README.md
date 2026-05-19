@@ -5,7 +5,8 @@ Projet PIML
     Objectifs :
 ==================
 Le projet consiste en l'implémentation d'un workflow pour classer des images de cellules.
-Le but est de différencier les cellules saines et les cellules infectées par la malaria.
+Le but est de différencier les cellules saines et les cellules infectées par la malaria parmis de multiples échantillons issus de nombreux patients.
+Pour cela nous utiliserons un mélange d'algorithmes de traitement d'image, d'algorithme de machine learning et de visualisation de performance.
 
 ================================
     Présentation des datas :
@@ -42,7 +43,9 @@ Des descripteurs alternatifs sont également calculés sur chaque image pour aid
 - la moyenne de la saturation de l'image
 - le nombre de régions détecté après segmentation Watershed de l'image
 
-La deuxième partie a pour but de
+La deuxième partie a pour objectif d’implémenter et de comparer différents modèles de perceptrons multicouches (MLP) afin d’identifier le plus performant. Nous avons commencé par développer un modèle simple puis nous avons introduit progressivement plusieurs améliorations telles que l’utilisation de la fonction d’activation ReLU, du dropout, de la Binary Cross-Entropy et du mini-batch gradient descent. 
+Afin d’optimiser au mieux les performances du réseau, nous avons implémenté une fonction qui recherche les hyper paramètres optimaux, pour le learning rate et le nombre d’époques d'entraînement. 
+Enfin, la sélection du meilleur modèle a été réalisée à partir des performances obtenues en accuracy et sur l’analyse des courbes d’apprentissage.
 
 La troisième partie a pour but de 
 
@@ -51,6 +54,7 @@ La troisième partie a pour but de
 =====================================
 (qu'est-ce que ça nécessite ? Peut-il tourner sur Linux VM)
 
+Pour 
 
 ===================================
     Comment exécuter une démo :
