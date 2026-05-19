@@ -15,7 +15,7 @@ import Partie_1_Pre_Traitement as pre_traitement
 # Chargement des images 
 # ==============================================================================================
 
-def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=1000):
+def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=1000, return_combined_features=False):
     """Charge et prétraite les images de deux classes pour l'entraînement.
 
     Args:
@@ -23,16 +23,13 @@ def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=1000
         parasitized (str): chemin du dossier des images infectées.
         image_size (tuple): taille de redimensionnement des images (largeur, hauteur).
         max_per_class (int): nombre maximal d'images à charger par classe.
+        return_combined_features (bool): si True, retourne aussi les combined_features.
 
     Returns:
-        tuple: (data, target)
-            - data (np.ndarray): tableau de vecteurs d'entrée aplatis après prétraitement.
+        tuple: (data, target) ou (data, target, combined_features)
+            - data (np.ndarray): tableau de vecteurs HS aplatis après prétraitement.
             - target (np.ndarray): vecteur d'étiquettes 0/1 correspondant aux classes.
-
-    Notes:
-        - Conversion des images RGB en niveaux de gris.
-        - Égalisation d'histogramme puis standardisation des valeurs.
-        - Charge d'abord les images non infectées (étiquette 0), puis infectées (étiquette 1).
+            - combined_features (np.ndarray, optionnel): vecteurs H*S + advanced_feats.
     """
 
     images = []
@@ -56,15 +53,23 @@ def load_images(uninfected, parasitized, image_size=(16, 16), max_per_class=1000
 
     resized_images = pre_traitement.resize_images(images, target_size=image_size)
     hsv_images = pre_traitement.RGB_to_HSV(resized_images)
-    hs_images = pre_traitement.HSV_by_HS(hsv_images)
-    hs_images = pre_traitement.standardize_image(hs_images)
 
-    data = []
-    for img in hs_images:
-        img = np.asarray(img)
-        data.append(img.flatten())
+    combined_features_list = []
+    for rgb_img, hsv_img in zip(resized_images, hsv_images):
+        arr_rgb = rgb_img.astype(np.float32) / 255.0
+        advanced_feats = pre_traitement.extract_advanced_features(arr_rgb, hsv_img)
+        arr_feature = hsv_img[:, :, 0] * hsv_img[:, :, 1]
 
-    return np.array(data), np.array(target)
+        combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
+        combined_features_list.append(combined_features)
+
+    combined_features_array = np.array(combined_features_list)
+
+    if return_combined_features:
+        return combined_features_array, np.array(target), combined_features_array
+
+    return combined_features_array, np.array(target)
+
 
 # ==============================================================================================
 # Modèle simple avec la fonction sigmoïde
@@ -680,11 +685,20 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5,
             [folds[i] for i in range(n_folds) if i != k]
         )
 
+
         # séparation des données
         X_train = data[train_idx]
         y_train = target[train_idx]
 
-        X_test = data[test_idx]
+        #caclul des stats sur l'entrainement pour éviter data leakage
+        mean_train = np.mean(X_train, axis=0)
+        std_train = np.std(X_train, axis=0)
+        std_train[std_train == 0] = 1
+
+        #applique des stats sur les données d'entrainement et de test
+        X_train = (X_train - mean_train) / std_train
+        X_test = (data[test_idx] - mean_train) / std_train
+
         y_test = target[test_idx]
 
         result = train_func(

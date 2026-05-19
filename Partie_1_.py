@@ -19,10 +19,9 @@ from skimage.measure import label
 # -watershed_region_count (à utiliser après le pipeline optimal)
 
 # ==============================================================================================
-# FONCTIONS POUR LE TRAITEMENT DES IMAGES - PIPELINE OPTIMAL 
+# Fonctions pour traitement des images 
 # ==============================================================================================
 
-# ============
 
 def standardize_images(images):
     """
@@ -46,6 +45,7 @@ def standardize_images(images):
             standardized_images.append((img - mean) / std)
 
     return standardized_images
+
 
 # ============
 
@@ -192,38 +192,6 @@ def RGB_to_HSV(images):
         hsv_images.append(hsv)
 
     return hsv_images
-
-# ============
-
-def HSV_by_HS(hsv_images):
-    """
-    Remplace chaque pixel HSV (H,S,V)
-    par la valeur H*S.
-
-    Paramètres
-    ----------
-    hsv_images : list
-        Liste d'images HSV
-
-    Retour
-    ------
-    hs_images : list
-        Liste d'images 2D
-    """
-
-    hs_images = []
-
-    for hsv in hsv_images:
-
-        H = hsv[:, :, 0]
-        S = hsv[:, :, 1]
-
-        # Produit H*S
-        hs = H * S
-
-        hs_images.append(hs)
-
-    return hs_images
 
 # ============
 
