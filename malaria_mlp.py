@@ -255,7 +255,7 @@ def mlp_error_entropy(data, target, w, b):
     E = 0
     epsilon = 1e-15
     for x in range(len(data)):
-        a, _ = eval_forward_relu(data[x], w, b) # <-- MODIF ICI (a, _)
+        a, _ = eval_forward_relu(data[x], w, b) 
         pred = np.clip(a[-1][0], epsilon, 1 - epsilon)
         y = target[x]
         e = - (y * np.log(pred) + (1-y) * np.log(1-pred))
@@ -263,7 +263,7 @@ def mlp_error_entropy(data, target, w, b):
     return E / len(data)
 
 def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 8],
-                             learning_rate=0.01, batch_size=32, random_state=42, dropout_rate=0.2): # <-- Ajout ici
+                             learning_rate=0.01, batch_size=32, random_state=42, dropout_rate=0.2):
     rng = np.random.default_rng(random_state)
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
@@ -281,15 +281,20 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 
             grad_b = [np.zeros_like(b_l) for b_l in b]
 
             for i in batch_indices:
-                a = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True)
+                # --- MODIF ICI : On récupère a ET masks ---
+                a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True)
                 err = [None] * (L + 1)
                 
-                # Erreur en sortie (BCE + Sigmoïde)
                 err[-1] = a[-1] - target[i]
                 
-                # Backpropagation (ReLU + Dropout)
+                # Backpropagation rigoureuse
                 for l in range(L-1, 0, -1):
-                    da = (a[l] > 0).astype(float) / (1.0 - dropout_rate)
+                    # 1. Dérivée de base de ReLU
+                    da = (a[l] > 0).astype(float)
+                    
+                    # 2. Application propre du masque du Dropout
+                    if masks[l] is not None:
+                        da = (da * masks[l]) / (1.0 - dropout_rate)
                     
                     err_next = err[l+1]
                     err[l] = np.matmul(w[l+1].T, err_next) * da
@@ -308,7 +313,7 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 
     return w, b, losses
 
 def predict_proba_relu(x, w, b):
-    a = eval_forward_relu(x, w, b)
+    a, _ = eval_forward_relu(x, w, b) # <-- MODIF ICI (a, _)
     return a[-1][0]
 
 def predict_relu(x, w, b, seuil=0.5):
