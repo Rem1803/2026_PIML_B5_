@@ -38,7 +38,11 @@ COMPOSANTES_PCA = 50
 UNINFECTED_PATH = r"Uninfected"
 PARASITIZED_PATH = r"Parasitized"
 
-def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
+def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=1000):
+    """
+    Charge les images et extrait les features pour les deux classes (uninfected et parasitized).
+    Retourne X (features) et y (labels).
+    """
     data = []
     target = []
 
@@ -68,13 +72,21 @@ def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_cl
 # ==============================================================================================
 
 def sigmoid(z):
-    z = np.clip(z, -500, 500)
+    """Activation sigmoïde (sortie entre 0 et 1)."""
+    z = np.clip(z, -500, 500) # pour éviter overflow
     return 1 / (1 + np.exp(-z))
 
 def relu(z):
+    """Activation ReLU (sortie positive)."""    
     return np.maximum(0, z)
 
 def init_parameters(n_feats, hidden_layer_sizes, rng=None):
+    """
+    Initialise poids et biais du réseau de neurones avec He initialization pour ReLU et un léger bruit pour les biais.
+    Arguments : - n_feats : nombre de features en entrée
+                - hidden_layer_sizes : liste des tailles des couches cachées
+    Retourne : listes de poids et biais pour chaque couche.
+    """
     if rng is None: rng = np.random.default_rng()
     L = 1 + len(hidden_layer_sizes)
     
@@ -95,6 +107,16 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
     return w, b
 
 def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
+    """
+    Propagation avant du MLP avec activations ReLU et option de Dropout.
+    Arguments : - x : vecteur d'entrée
+                - w, b : poids et biais du réseau
+                - dropout_rate : taux de dropout
+                - training : booléen indiquant si on est en phase d'entraînement (applique le dropout) ou d'inférence (pas de dropout)
+                - rng : générateur de nombres aléatoires pour le dropout
+    Retourne : - a : liste des activations de chaque couche
+                - masks : liste des masques de dropout appliqués à chaque couche (None si pas de dropout)
+    """
     L = len(w) - 1
     a = [np.copy(x)] 
     masks = [None]
@@ -119,6 +141,9 @@ def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
     return a, masks
 
 def mlp_error_entropy(data, target, w, b):
+    """
+    Calcule l'erreur d'entropie croisée (loss) moyenne sur l'ensemble des données.
+    """
     E = 0
     epsilon = 1e-15
     for x in range(len(data)):
@@ -129,7 +154,7 @@ def mlp_error_entropy(data, target, w, b):
         E += e
     return E / len(data)
 
-def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
+def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                              learning_rate=0.01, batch_size=32, random_state=42, 
                              dropout_rate=0.2, patience=15, lambda_reg=0.0001):
     rng = np.random.default_rng(random_state)
