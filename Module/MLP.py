@@ -24,7 +24,7 @@ MAX_IMAGES = 1000
 TAUX_APPRENTISSAGE = 0.01  
 BATCH_SIZE = 32
 EPOCHS = 150              
-PATIENCE = 5      
+PATIENCE = 10      
 SEUIL_DECISION = 0.35
 TAUX_DROPOUT = 0.2   
 LAMBDA_L2 = 0.0001   # Régularisation L2
@@ -34,8 +34,8 @@ COMPOSANTES_PCA = 50
 # Chemins des dossiers 
 # =======================
 
-UNINFECTED_PATH = r"Uninfected"
-PARASITIZED_PATH = r"Parasitized"
+UNINFECTED_PATH = r"Data\Uninfected"
+PARASITIZED_PATH = r"Data\Parasitized"
 
 # =======================
 # Fonctions utilitaires
@@ -98,7 +98,7 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
     for l in range(2, L): #couches cachées 
         fan_in = hidden_layer_sizes[l-2] # nombre de neurones dans la couche précédente
         w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in))) 
-        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))=
+        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))
 
     fan_in = hidden_layer_sizes[L-2]
     w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
@@ -156,7 +156,7 @@ def mlp_error_entropy(data, target, w, b):
 
 def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                              learning_rate=0.01, batch_size=32, random_state=42, 
-                             dropout_rate=0.2, patience=15, lambda_reg=0.0001):
+                             dropout_rate=0.2, patience=5, lambda_reg=0.0001):
     """
     Entraîne un MLP avec mini-batch gradient descent, activations ReLU, régularisation L2, et early stopping.
     Arguments : - data, target : données d'entraînement
@@ -187,7 +187,7 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
     for epoch in range(n_epochs):
         indices = rng.permutation(n_objs)
         for start in range(0, n_objs, batch_size):
-            batch_indices = indices[start:start + batch_size]
+            batch_indices = indices[start:start + batch_size] #
             current_batch_size = len(batch_indices)
 
             grad_w = [np.zeros_like(w_l) for w_l in w]
@@ -197,30 +197,30 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                 a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True, rng=rng)
                 err = [None] * (L + 1)
                 
-                err[-1] = a[-1] - target[i]
+                err[-1] = a[-1] - target[i] #erreur de la couche de sortie (probabilité prédite - label réel)
                 
                 for l in range(L-1, 0, -1):
                     da = (a[l] > 0).astype(float)
                     if masks[l] is not None:
-                        da = (da * masks[l]) / (1.0 - dropout_rate)
+                        da = (da * masks[l]) / (1.0 - dropout_rate) #ajustement du gradient pour le dropout
                     
                     err_next = err[l+1]
-                    err[l] = np.matmul(w[l+1].T, err_next) * da
+                    err[l] = np.matmul(w[l+1].T, err_next) * da #calcul de l'erreur pour la couche l en utilisant la règle de la chaîne et en tenant compte de l'activation ReLU et du dropout
                 
                 for l in range(1, L + 1):
-                    grad_w[l] += np.outer(err[l], a[l-1])
+                    grad_w[l] += np.outer(err[l], a[l-1]) #gradient de la perte par rapport aux poids de la couche l
                     grad_b[l] += err[l]
 
             for l in range(1, L + 1):
-                # Mise à jour avec Régularisation L2 (Amélioration 2)
+                # Mise à jour avec Régularisation L2 
                 w[l] -= learning_rate * (grad_w[l] / current_batch_size + lambda_reg * w[l])
                 b[l] -= learning_rate * (grad_b[l] / current_batch_size)
 
-        # Calcul de l'erreur en fin d'époque (sans dropout)
+        # Calcul de l'erreur en fin d'époque 
         loss = mlp_error_entropy(data, target, w, b)
         losses.append(loss)
         
-        # --- VÉRIFICATION EARLY STOPPING ---
+        # Early Stopping : on sauvegarde les meilleurs poids et biais si la loss s'améliore, sinon on incrémente le compteur de patience
         if loss < best_loss:
             best_loss = loss
             patience_counter = 0
@@ -228,32 +228,38 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
             best_b = [b_i.copy() for b_i in b]
         else:
             patience_counter += 1
-            
+        
+        # Si le compteur de patience atteint le seuil, on arrête l'entraînement et on restaure les meilleurs poids et biais
         if patience_counter >= patience:
             print(f"    -> Early Stopping à l'époque {epoch+1} (Loss opt: {best_loss:.4f})")
             w = [w_i.copy() for w_i in best_w]
             b = [b_i.copy() for b_i in best_b]
             break
 
-    # Si on n'a jamais déclenché le break, on s'assure de renvoyer le meilleur
+    # Si l'entraînement s'est terminé normalement sans atteindre le nombre maximum d'époques, on restaure les meilleurs poids et biais trouvés pendant l'entraînement
     if patience_counter < patience:
         w = [w_i.copy() for w_i in best_w]
         b = [b_i.copy() for b_i in best_b]
 
     return w, b, losses
 
+def predict_proba_relu(x, w, b):
+    """
+    Calcul la probabilité prédite par le MLP avec activations ReLU.
+    """
+    a, _ = eval_forward_relu(x, w, b, training=False)
+    return a[-1][0]
+
 def predict_relu(x, w, b, seuil=0.35):
-    """ 
+    """
     Prédit la classe pour un échantillon donné en utilisant le modèle MLP avec activation ReLU.
     Arguments : - x : vecteur d'entrée
                 - w, b : poids et biais du modèle
                 - seuil : seuil de décision pour classer en 0 ou 1
     Retourne : - 1 si la probabilité prédite est supérieure ou égale au seuil, sinon 0
     """
-    proba = eval_forward_relu(x, w, b)[-1][0]
-    if proba is None: return 0 
+    proba = predict_proba_relu(x, w, b)
     return 1 if proba >= seuil else 0
-
 
 def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01,
     batch_size=32, hidden_layer_sizes=[32,16], n_epochs=EPOCHS, random_state=42, seuil=0.5,
@@ -273,42 +279,48 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
     indices = np.arange(len(data))
     np.random.seed(random_state)
-    np.random.shuffle(indices)
+    np.random.shuffle(indices) # mélange des indices pour créer des folds aléatoires
     folds = np.array_split(indices, n_folds)
 
     accuracies = []
-    mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0}
+    mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0} #initialisation de la matrice de confusion globale pour accumuler les résultats de tous les folds
 
-    n_pixels = data.shape[1] - 8
+    n_pixels = data.shape[1] - 8 
 
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
 
+        #indices pour les données d'entraînement (tous les folds sauf le k-ième) et de test (le k-ième fold)
         test_idx = folds[k]
-        train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k])
-
+        train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k]) 
         X_train, y_train = data[train_idx], target[train_idx]
         X_test, y_test = data[test_idx], target[test_idx]
 
         mean_train = np.mean(X_train, axis=0)
         std_train = np.std(X_train, axis=0)
-        std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+        std_train = np.where(std_train < 1e-8, 1e-8, std_train) #pour éviter la division par zéro lors de la normalisation, on remplace les écarts-types très petits par une petite valeur fixe.
 
+        # Normalisation des données : on utilise la moyenne et l'écart-type calculés sur les données d'entraînement pour normaliser à la fois les données d'entraînement et de test, afin d'éviter toute fuite de données (data leakage) entre les folds.
         X_train_scaled = (X_train - mean_train) / std_train
         X_test_scaled = (X_test - mean_train) / std_train
 
+        # Clipping pour éviter les valeurs extrêmes qui pourraient causer des problèmes de convergence ou de saturation des activations, surtout avec ReLU qui
         X_train_scaled = np.clip(X_train_scaled, -5, 5)
         X_test_scaled = np.clip(X_test_scaled, -5, 5)
 
-        X_train_pixels, X_train_expert = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
-        X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
+        # Séparation des features d'image (pixels) et des features additionnelles pour appliquer la PCA uniquement sur les pixels, ce qui permet de réduire la dimensionnalité tout en conservant les informations pertinentes pour la classification.
+        X_train_pixels, X_train_additional = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
+        X_test_pixels, X_test_additionnal = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
 
-        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state)
-        X_train_pixels_pca = pca.fit_transform(X_train_pixels)
+        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state) #random_state pour la reproductibilité de la PCA
+        # Fit_transform sur les données d'entraînement pour apprendre la projection PCA et appliquer la transformation
+        X_train_pixels_pca = pca.fit_transform(X_train_pixels) 
         X_test_pixels_pca = pca.transform(X_test_pixels)
 
-        X_train_final = np.concatenate([X_train_pixels_pca, X_train_expert], axis=1)
-        X_test_final = np.concatenate([X_test_pixels_pca, X_test_expert], axis=1)
+        # Concatenation des features d'image réduites par PCA avec les avec les features additionnelles pour former les entrées finales du MLP, ce qui permet au modèle  d'utiliser à la fois
+        # les informations principales des images et les caractéristiques calculées manuellement.
+        X_train_final = np.concatenate([X_train_pixels_pca, X_train_additional], axis=1)
+        X_test_final = np.concatenate([X_test_pixels_pca, X_test_additionnal], axis=1)
 
         w, b, losses = train_func(
             X_train_final, y_train,
@@ -324,12 +336,13 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
         y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
 
+        # Mise à jour de la matrice de confusion globale en accumulant les résultats du fold actuel
         mc_fold = eval.matrice_confusion(y_test, y_pred)
         mc_globale['VP'] += mc_fold['VP']
         mc_globale['VN'] += mc_fold['VN']
         mc_globale['FP'] += mc_fold['FP']
         mc_globale['FN'] += mc_fold['FN']
-
+        
         acc = eval.exactitude(mc_fold)
         accuracies.append(acc)
 
@@ -360,10 +373,10 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
     results = []
     best_result = None
 
-    # SPEED SETTINGS
-    n_folds = 3          # rapide
-    n_epochs = 60        # suffisant avec early stopping
-    prune_threshold = 0.55  # un peu plus permissif
+    # Hyperparamètres fixes pour la validation croisée à l'intérieur de chaque essai de recherche aléatoire
+    n_folds = 3        
+    n_epochs = 60       
+    prune_threshold = 0.55  #seuil de précision en dessous duquel une configuration est considérée comme médiocre et est "prunée" (abandonnée) pour éviter de gaspiller du temps de calcul sur des configurations peu prometteuses
 
     for trial in range(n_trials):
 
@@ -391,7 +404,7 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
         print(f"batch_size    : {batch_size}")
         print(f"learning_rate : {learning_rate:.6f}")
 
-        #  CROSS VALIDATION
+    
         cv_result = cross_validation(
             data,
             target,
@@ -423,6 +436,7 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
 
         results.append(result)
 
+        # Mise à jour du meilleur résultat si la configuration actuelle est meilleure que le meilleur résultat précédent
         if best_result is None or mean_acc > best_result["mean_accuracy"]:
             best_result = result
 
