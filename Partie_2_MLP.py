@@ -67,10 +67,6 @@ def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_cl
     return X_brut, y
 
 
-# ==============================================================================================
-# Etape 4 : Le Modèle Mathématique (MLP)
-# ==============================================================================================
-
 def sigmoid(z):
     """Activation sigmoïde (sortie entre 0 et 1)."""
     z = np.clip(z, -500, 500) # pour éviter overflow
@@ -157,6 +153,20 @@ def mlp_error_entropy(data, target, w, b):
 def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                              learning_rate=0.01, batch_size=32, random_state=42, 
                              dropout_rate=0.2, patience=15, lambda_reg=0.0001):
+    """
+    Entraîne un MLP avec mini-batch gradient descent, activations ReLU, régularisation L2, et early stopping.
+    Arguments : - data, target : données d'entraînement
+                - n_epochs : nombre maximum d'époques
+                - hidden_layer_sizes : liste des tailles des couches cachées
+                - learning_rate : taux d'apprentissage
+                - batch_size : taille des mini-batchs
+                - random_state : graine pour la reproductibilité
+                - dropout_rate : taux de dropout à appliquer pendant l'entraînement
+                - patience : nombre d'époques sans amélioration avant d'arrêter l'entraînement
+                - lambda_reg : coefficient de régularisation L2
+    Retourne : - w, b : poids et biais du modèle entraîné
+                - losses : liste des pertes (loss) à la fin de chaque époque
+    """
     rng = np.random.default_rng(random_state)
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
@@ -228,34 +238,33 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
 
     return w, b, losses
 
-def predict_proba_relu(x, w, b):
-    a, _ = eval_forward_relu(x, w, b)
-    return a[-1][0]
-
-def predict_relu(x, w, b, seuil=0.5):
-    proba = predict_proba_relu(x, w, b)
+def predict_relu(x, w, b, seuil=0.35):
+    """ 
+    Prédit la classe pour un échantillon donné en utilisant le modèle MLP avec activation ReLU.
+    Arguments : - x : vecteur d'entrée
+                - w, b : poids et biais du modèle
+                - seuil : seuil de décision pour classer en 0 ou 1
+    Retourne : - 1 si la probabilité prédite est supérieure ou égale au seuil, sinon 0
+    """
+    proba = eval_forward_relu(x, w, b)[-1][0]
     return 1 if proba >= seuil else 0
 
 
-# ==============================================================================================
-# Etape 5 : Évaluation, Métriques, et Gestion du Modèle
-# ==============================================================================================
-
-def cross_validation(
-    data,
-    target,
-    train_func,
-    predict_func,
-    n_folds=5,
-    learning_rate=0.01,
-    batch_size=32,
-    hidden_layer_sizes=[32,16],
-    n_epochs=EPOCHS,
-    random_state=42,
-    seuil=0.5,
-    dropout_rate=0.0
-):
-    """Effectue une cross-validation K-fold et retourne les performances globales."""
+def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01,
+    batch_size=32, hidden_layer_sizes=[32,16], n_epochs=EPOCHS, random_state=42, seuil=0.5,
+    dropout_rate=0.0):
+    """
+    Effectue une validation croisée k-fold pour évaluer les performances d'un modèle de MLP.
+    Arguments : - data, target : données et labels
+                - train_func : fonction d'entraînement du MLP
+                - predict_func : fonction de prédiction du MLP
+                - n_folds : nombre de folds pour la validation croisée
+                - learning_rate, batch_size, hidden_layer_sizes, n_epochs : hyperparamètres pour l'entraînement
+                - random_state : graine pour la reproductibilité
+                - seuil : seuil de décision pour la classification
+                - dropout_rate : taux de dropout à appliquer pendant l'entraînement
+    Retourne : - un dictionnaire contenant la précision moyenne et la matrice de confusion globale
+    """
 
     indices = np.arange(len(data))
     np.random.seed(random_state)
