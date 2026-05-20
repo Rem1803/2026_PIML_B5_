@@ -282,3 +282,16 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     std_gradient = np.std(gradient_mag)
 
     return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
+
+def transformer_image_en_features(chemin_image, image_size):
+    """Ouvre une image et la transforme en un vecteur prêt pour le réseau de neurones."""
+    img = Image.open(chemin_image).convert("RGB")
+    img_resized = img.resize(image_size)
+    arr_rgb = np.array(img_resized) / 255.0
+    arr_hsv = rgb_to_hsv(arr_rgb)
+    
+    advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
+    arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
+    
+    combined_features = np.concatenate([arr_feature.flatten(), advanced_feats])
+    return combined_features
