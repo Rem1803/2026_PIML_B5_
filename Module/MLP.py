@@ -247,7 +247,7 @@ def predict_proba_relu(x, w, b):
     """
     Calcul la probabilité prédite par le MLP avec activations ReLU.
     """
-    a, _ = eval_forward_relu(x, w, b)
+    a, _ = eval_forward_relu(x, w, b, training=False)
     return a[-1][0]
 
 def predict_relu(x, w, b, seuil=0.35):
