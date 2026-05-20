@@ -9,8 +9,8 @@ Chargement des données, implémentation de plusieurs modèles de MLP (sigmoïde
 fonctions de prédiction associées, cross-validation pour évaluer les modèles, sauvegarde des modèles entraînés 
 et visualtisation des courbes d'apprentissage.
 """
-import Partie_1_Pre_Traitement as pre_traitement
-import Partie_3_Evaluation as eval
+import Pre_traitement as pre_traitement
+import Evaluation as eval
 
 import os
 import random

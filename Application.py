@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import shutil
 from PIL import Image
 
-import Partie_1_Pre_Traitement as pre_traitement
-import Partie_2_MLP as mlp
+import Pre_traitement as pre_traitement
+import MLP as mlp
 
 
 def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
