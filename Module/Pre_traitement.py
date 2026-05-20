@@ -309,7 +309,7 @@ def transformer_image_en_features(chemin_image, image_size):
     advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
     
     # 2. Calcul du descripteur Watershed 
-    # On travaille sur une version grise (moyenne des canaux RGB)
+    # On travaille sur une version grise de l'image pour le watershed
     gray_img = 0.299 * arr_rgb[:, :, 0] + 0.587 * arr_rgb[:, :, 1] + 0.114 * arr_rgb[:, :, 2]
     # On passe la liste [gray_img] car watershed_region_count attend une liste
     n_regions = watershed_region_count([gray_img])[0]
