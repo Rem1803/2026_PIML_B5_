@@ -1,13 +1,17 @@
-## Partie 3 — Évaluation, interprétabilité & application finale
-### 1. Évaluation avancée
-
-#### Matrice de confusion
+# ==============================================================================================
+# Partie 3 — Évaluation, interprétabilité & application finale
+# ==============================================================================================
 
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
 
+# ==============================================================================================
+# 1. Fonctions Mathématiques et Métriques
+# ==============================================================================================
+
 def matrice_confusion(y_vrai, y_predit):
+    """Calcule la matrice de confusion à partir des prédictions brutes."""
     vp = sum((y_vrai[i] == 1 and y_predit[i] == 1) for i in range(len(y_vrai)))
     vn = sum((y_vrai[i] == 0 and y_predit[i] == 0) for i in range(len(y_vrai)))
     fp = sum((y_vrai[i] == 0 and y_predit[i] == 1) for i in range(len(y_vrai)))
@@ -27,16 +31,75 @@ def rappel(mc):
 def score_f1(prec, rap):
     return 2 * (prec * rap) / (prec + rap) if (prec + rap) > 0 else 0.0
 
+def roc_auc(y_true, y_scores):
+    """
+    Calcule le score ROC AUC en utilisant la vectorisation NumPy.
+    """
+    y_true = np.asarray(y_true)
+    y_scores = np.asarray(y_scores)
+    
+    pos_scores = y_scores[y_true == 1]
+    neg_scores = y_scores[y_true == 0]
+    
+    if len(pos_scores) == 0 or len(neg_scores) == 0:
+        raise ValueError("Il faut au moins un exemple de la classe 0 et de la classe 1.")
+        
+    diff = pos_scores[:, np.newaxis] - neg_scores
+    concordant_pairs = np.sum(diff > 0)
+    ties = np.sum(diff == 0) * 0.5
+    
+    total_pairs = len(pos_scores) * len(neg_scores)
+    return (concordant_pairs + ties) / total_pairs
+
+def roc_curve_points(y_true, y_scores):
+    """
+    Calcule les points (FPR, TPR) et les seuils de la courbe ROC.
+    """
+    y_true = np.asarray(y_true)
+    y_scores = np.asarray(y_scores)
+    
+    desc_score_indices = np.argsort(y_scores)[::-1]
+    y_scores_sorted = y_scores[desc_score_indices]
+    y_true_sorted = y_true[desc_score_indices]
+    
+    total_positives = np.sum(y_true == 1)
+    total_negatives = np.sum(y_true == 0)
+    
+    tpr_list = [0.0]
+    fpr_list = [0.0]
+    thresholds = [y_scores_sorted[0] + 0.1]
+    
+    tp = 0
+    fp = 0
+    
+    for i in range(len(y_scores_sorted)):
+        if y_true_sorted[i] == 1:
+            tp += 1
+        else:
+            fp += 1
+            
+        if i == len(y_scores_sorted) - 1 or y_scores_sorted[i] != y_scores_sorted[i+1]:
+            tpr_list.append(tp / total_positives)
+            fpr_list.append(fp / total_negatives)
+            thresholds.append(y_scores_sorted[i])
+            
+    return np.array(fpr_list), np.array(tpr_list), np.array(thresholds)
+
+
+# ==============================================================================================
+# 2. Fonctions de Visualisation
+# ==============================================================================================
+
 def plot_confusion_matrix(cm, classes, normalize=False, title='Matrice de Confusion', cmap=plt.cm.Blues):
     """
-    Cette fonction affiche la matrice de confusion.
+    Affiche la matrice de confusion (format Numpy Array).
     Normalisation peut être appliquée en définissant `normalize=True`.
     """
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        print("Matrice de confusion normalisée")
+        print("Affichage de la Matrice de confusion normalisée...")
     else:
-        print('Matrice de confusion, sans normalisation')
+        print('Affichage de la Matrice de confusion (sans normalisation)...')
 
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
@@ -56,115 +119,52 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Matrice de Confus
     plt.xlabel('Prédictions du Modèle')
     plt.tight_layout()
 
-# Exemple d'utilisation
-cm = np.array([[50, 10], [5, 35]])  # Exemple de matrice de confusion
-classes = ['Cellules Saines', 'Cellules Malades']
-plot_confusion_matrix(cm, classes, normalize=True)
-plt.show()
-
-#### ROC-AUC
-def roc_auc(y_true, y_scores):
+def plot_roc_curve(fpr, tpr, auc_score, title='Courbe ROC (From Scratch)'):
     """
-    Calcule le score ROC AUC en utilisant la vectorisation NumPy.
+    Génère et affiche le graphique de la courbe ROC.
     """
-    # Convertir en tableaux NumPy pour la vectorisation
-    y_true = np.asarray(y_true)
-    y_scores = np.asarray(y_scores)
-    
-    # 1. Séparer les scores via des masques booléens
-    pos_scores = y_scores[y_true == 1]
-    neg_scores = y_scores[y_true == 0]
-    
-    if len(pos_scores) == 0 or len(neg_scores) == 0:
-        raise ValueError("Il faut au moins un exemple de la classe 0 et de la classe 1.")
-        
-    # 2. Calculer les différences de scores entre les positifs et les négatifs
-    # On transforme pos_scores en colonne et on soustrait neg_scores (ligne).
-    # Cela crée instantanément une matrice comparant chaque positif à chaque négatif.
-    diff = pos_scores[:, np.newaxis] - neg_scores
-    
-    # 3. Compter les paires concordantes et les égalités
-    concordant_pairs = np.sum(diff > 0)
-    ties = np.sum(diff == 0) * 0.5
-    
-    # 4. Calcul final
-    total_pairs = len(pos_scores) * len(neg_scores)
-    auc = (concordant_pairs + ties) / total_pairs
-    
-    return auc
+    plt.figure()
+    plt.plot(fpr, tpr, color='blue', lw=2, label=f'Courbe ROC (AUC = {auc_score:.2f})')
+    plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--') # La diagonale du hasard
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Taux de Faux Positifs (FPR)')
+    plt.ylabel('Taux de Vrais Positifs (TPR)')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.tight_layout()
 
-# --- Exemple d'utilisation ---
-y_true = [0, 0, 1, 1]
-y_scores = [0.1, 0.4, 0.35, 0.8]
 
-auc_score = roc_auc(y_true, y_scores)
-print(f"ROC AUC Score (NumPy) : {auc_score}")
+# ==============================================================================================
+# 3. Exécution et Tests (Uniquement si le script est lancé directement)
+# ==============================================================================================
 
-def roc_curve(y_true, y_scores):
-    """
-    Calcule les points (FPR, TPR) de la courbe ROC.
-    """
-    y_true = np.asarray(y_true)
-    y_scores = np.asarray(y_scores)
+if __name__ == "__main__":
     
-    # 1. Trier les scores par ordre décroissant
-    # np.argsort renvoie les index qui trieraient le tableau. [::-1] inverse l'ordre pour l'avoir en décroissant.
-    desc_score_indices = np.argsort(y_scores)[::-1]
-    y_scores_sorted = y_scores[desc_score_indices]
-    y_true_sorted = y_true[desc_score_indices]
+    print("--- TEST DES FONCTIONS DE MÉTRIQUES ---")
     
-    # Nombre total de positifs et de négatifs réels
-    total_positives = np.sum(y_true == 1)
-    total_negatives = np.sum(y_true == 0)
+    # 1. Test de la Matrice de Confusion
+    cm_test = np.array([[50, 10], [5, 35]])  
+    classes_labels = ['Cellules Saines', 'Cellules Malades']
     
-    # Listes pour stocker les coordonnées des points de la courbe (on commence à 0,0)
-    tpr_list = [0.0]
-    fpr_list = [0.0]
-    thresholds = [y_scores_sorted[0] + 0.1] # Un seuil artificiel supérieur au max
+    plt.figure(figsize=(6, 5))
+    plot_confusion_matrix(cm_test, classes_labels, normalize=True)
+    plt.show()
+
+    # 2. Test du score ROC-AUC et de la Courbe ROC
+    y_true_test = [0, 0, 1, 1]
+    y_scores_test = [0.1, 0.4, 0.35, 0.8]
     
-    tp = 0
-    fp = 0
+    # Calculs
+    auc_score_vectorized = roc_auc(y_true_test, y_scores_test)
+    print(f"ROC AUC Score (Vectorisé) : {auc_score_vectorized:.4f}")
     
-    # 2. Balayer chaque score et l'utiliser comme seuil
-    for i in range(len(y_scores_sorted)):
-        # Si la vraie valeur à ce seuil est 1, on gagne un Vrai Positif
-        if y_true_sorted[i] == 1:
-            tp += 1
-        # Sinon, c'est une fausse alerte, on gagne un Faux Positif
-        else:
-            fp += 1
-            
-        # 3. Ne sauvegarder le point que si le prochain score est différent (gère les ex-aequo)
-        if i == len(y_scores_sorted) - 1 or y_scores_sorted[i] != y_scores_sorted[i+1]:
-            tpr_list.append(tp / total_positives)
-            fpr_list.append(fp / total_negatives)
-            thresholds.append(y_scores_sorted[i])
-            
-    return np.array(fpr_list), np.array(tpr_list), np.array(thresholds)
+    fpr, tpr, thresholds = roc_curve_points(y_true_test, y_scores_test)
+    auc_score_trapezoid = np.trapezoid(tpr, fpr)
+    print(f"ROC AUC Score (Règle du trapèze) : {auc_score_trapezoid:.4f}")
+    
+    # Affichage
+    plot_roc_curve(fpr, tpr, auc_score_trapezoid)
+    plt.show()
 
-# --- Exemple d'utilisation ---
-y_true = [0, 0, 1, 1]
-y_scores = [0.1, 0.4, 0.35, 0.8]
-
-fpr, tpr, thresholds = roc_curve(y_true, y_scores)
-
-# On calcule l'AUC à partir des points de la courbe ROC en utilisant la règle du trapèze (trapezoidal rule)
-auc_score = np.trapezoid(tpr, fpr)
-
-# Affichage de la courbe ROC
-plt.figure()
-plt.plot(fpr, tpr, color='blue', lw=2, label=f'Courbe ROC (AUC = {auc_score:.2f})')
-plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--') # La diagonale du hasard
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('Taux de Faux Positifs (FPR)')
-plt.ylabel('Taux de Vrais Positifs (TPR)')
-plt.title('Courbe ROC (From Scratch)')
-plt.legend(loc="lower right")
-plt.show()
-
-# Exemple d'utilisation
-y_true = [0, 0, 1, 1]
-y_scores = [0.1, 0.4, 0.35, 0.8]  # Probabilités prédites pour la classe positive
-roc_curve(y_true, y_scores)
-plt.close("all")
+    plt.close("all")
