@@ -7,107 +7,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools
 
-def confusion_matrix(y_true, y_pred):
-    """
-    Compute the confusion matrix for binary classification.
+def matrice_confusion(y_vrai, y_predit):
+    vp = sum((y_vrai[i] == 1 and y_predit[i] == 1) for i in range(len(y_vrai)))
+    vn = sum((y_vrai[i] == 0 and y_predit[i] == 0) for i in range(len(y_vrai)))
+    fp = sum((y_vrai[i] == 0 and y_predit[i] == 1) for i in range(len(y_vrai)))
+    fn = sum((y_vrai[i] == 1 and y_predit[i] == 0) for i in range(len(y_vrai)))
+    return {'VP': vp, 'VN': vn, 'FP': fp, 'FN': fn}
 
-    Parameters:
-    y_true (list): True labels (0 or 1).
-    y_pred (list): Predicted labels (0 or 1).
+def exactitude(mc):
+    total = mc['VP'] + mc['VN'] + mc['FP'] + mc['FN']
+    return (mc['VP'] + mc['VN']) / total if total > 0 else 0.0
 
-    Returns:
-    dict: A dictionary containing TP, TN, FP, and FN.
-    """
-    TP = sum((y_true[i] == 1 and y_pred[i] == 1) for i in range(len(y_true)))
-    TN = sum((y_true[i] == 0 and y_pred[i] == 0) for i in range(len(y_true)))
-    FP = sum((y_true[i] == 0 and y_pred[i] == 1) for i in range(len(y_true)))
-    FN = sum((y_true[i] == 1 and y_pred[i] == 0) for i in range(len(y_true)))
-
-    return {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN}
-
-def accuracy(conf_matrix):
-    """
-    Compute the accuracy from the confusion matrix.
-
-    Parameters:
-    conf_matrix (dict): A dictionary containing TP, TN, FP, and FN.
-
-    Returns:
-    float: The accuracy value.
-    """
-    TP = conf_matrix['TP']
-    TN = conf_matrix['TN']
-    FP = conf_matrix['FP']
-    FN = conf_matrix['FN']
+def precision(mc):
+    return mc['VP'] / (mc['VP'] + mc['FP']) if (mc['VP'] + mc['FP']) > 0 else 0.0
     
-    total = TP + TN + FP + FN
-    if total == 0:
-        return 0.0  # Avoid division by zero
-    return (TP + TN) / total
+def rappel(mc):
+    return mc['VP'] / (mc['VP'] + mc['FN']) if (mc['VP'] + mc['FN']) > 0 else 0.0
 
-def precision(conf_matrix):
-    """
-    Compute the precision from the confusion matrix.
-
-    Parameters:
-    conf_matrix (dict): A dictionary containing TP, TN, FP, and FN.
-
-    Returns:
-    float: The precision value.
-    """
-    TP = conf_matrix['TP']
-    FP = conf_matrix['FP']
-    
-    if TP + FP == 0:
-        return 0.0  # Avoid division by zero
-    return TP / (TP + FP)
-    
-def recall(conf_matrix):
-    """
-    Compute the recall from the confusion matrix.
-
-    Parameters:
-    conf_matrix (dict): A dictionary containing TP, TN, FP, and FN.
-
-    Returns:
-    float: The recall value.
-    """
-    TP = conf_matrix['TP']
-    FN = conf_matrix['FN']
-    
-    if TP + FN == 0:
-        return 0.0  # Avoid division by zero
-    return TP / (TP + FN)
-
-def f1_score(precision_value, recall_value):
-    """
-    Compute the F1 score from precision and recall.
-
-    Parameters:
-    precision_value (float): The precision value.
-    recall_value (float): The recall value.
-
-    Returns:
-    float: The F1 score.
-    """
-    if precision_value + recall_value == 0:
-        return 0.0  # Avoid division by zero
-    return 2 * (precision_value * recall_value) / (precision_value + recall_value)
-
-# Example usage:
-y_true = [0, 1, 1, 0, 1]
-y_pred = [0, 1, 0, 0, 1]
-conf_matrix = confusion_matrix(y_true, y_pred)
-acc = accuracy(conf_matrix)
-prec = precision(conf_matrix)
-rec = recall(conf_matrix)
-f1 = f1_score(prec, rec)
-
-print(f"Confusion Matrix: {conf_matrix}")
-print(f"Accuracy: {acc}")
-print(f"Precision: {prec}")
-print(f"Recall: {rec}")
-print(f"F1 Score: {f1}")
+def score_f1(prec, rap):
+    return 2 * (prec * rap) / (prec + rap) if (prec + rap) > 0 else 0.0
 
 def plot_confusion_matrix(cm, classes, normalize=False, title='Matrice de Confusion', cmap=plt.cm.Blues):
     """
