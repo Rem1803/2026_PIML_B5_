@@ -336,13 +336,13 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
         y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
 
-
+        # Mise à jour de la matrice de confusion globale en accumulant les résultats du fold actuel
         mc_fold = eval.matrice_confusion(y_test, y_pred)
         mc_globale['VP'] += mc_fold['VP']
         mc_globale['VN'] += mc_fold['VN']
         mc_globale['FP'] += mc_fold['FP']
         mc_globale['FN'] += mc_fold['FN']
-
+        
         acc = eval.exactitude(mc_fold)
         accuracies.append(acc)
 
@@ -373,10 +373,10 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
     results = []
     best_result = None
 
-    # SPEED SETTINGS
-    n_folds = 3          # rapide
-    n_epochs = 60        # suffisant avec early stopping
-    prune_threshold = 0.55  # un peu plus permissif
+    # Hyperparamètres fixes pour la validation croisée à l'intérieur de chaque essai de recherche aléatoire
+    n_folds = 3        
+    n_epochs = 60       
+    prune_threshold = 0.55  #seuil de précision en dessous duquel une configuration est considérée comme médiocre et est "prunée" (abandonnée) pour éviter de gaspiller du temps de calcul sur des configurations peu prometteuses
 
     for trial in range(n_trials):
 
@@ -404,7 +404,7 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
         print(f"batch_size    : {batch_size}")
         print(f"learning_rate : {learning_rate:.6f}")
 
-        #  CROSS VALIDATION
+    
         cv_result = cross_validation(
             data,
             target,
@@ -436,6 +436,7 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
 
         results.append(result)
 
+        # Mise à jour du meilleur résultat si la configuration actuelle est meilleure que le meilleur résultat précédent
         if best_result is None or mean_acc > best_result["mean_accuracy"]:
             best_result = result
 
