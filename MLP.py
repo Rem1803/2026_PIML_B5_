@@ -1,13 +1,6 @@
-import numpy as np 
-import matplotlib.pyplot as plt
-from PIL import Image
-import os
-
 """
-Partie_2_MLP.py
-Chargement des données, implémentation de plusieurs modèles de MLP (sigmoïde, ReLU, Binary Cross Entropy, Dropout, Mini-batch gradient), 
-fonctions de prédiction associées, cross-validation pour évaluer les modèles, sauvegarde des modèles entraînés 
-et visualtisation des courbes d'apprentissage.
+Chargement des données, implémentation du modèle MLP Mini-batch gradient descent avec activations ReLU, fonctions de coût,
+fonctions de prédiction associées, cross-validation pour évaluer les modèles, sauvegarde des modèles entraînés.
 """
 import Pre_traitement as pre_traitement
 import Evaluation as eval
@@ -22,21 +15,31 @@ from matplotlib.colors import rgb_to_hsv
 from PIL import Image
 from sklearn.decomposition import PCA
 
-# --- CONFIGURATION ---
+# =======================
+# CONFIGURATION 
+# =======================
+
 TAILLE_IMAGE = (32, 32)    
 MAX_IMAGES = 1000           
 TAUX_APPRENTISSAGE = 0.01  
 BATCH_SIZE = 32
-EPOCHS = 150               # Augmenté car l'Early Stopping arrêtera le modèle au bon moment
-PATIENCE = 15              # Nombre d'époques sans amélioration avant arrêt
+EPOCHS = 150              
+PATIENCE = 5      
 SEUIL_DECISION = 0.35
 TAUX_DROPOUT = 0.2   
-LAMBDA_L2 = 0.0001         # Régularisation L2
+LAMBDA_L2 = 0.0001   # Régularisation L2
 COMPOSANTES_PCA = 50       
 
+# =======================
 # Chemins des dossiers 
+# =======================
+
 UNINFECTED_PATH = r"Uninfected"
 PARASITIZED_PATH = r"Parasitized"
+
+# =======================
+# Fonctions utilitaires
+# =======================
 
 def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=1000):
     """
@@ -48,10 +51,10 @@ def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_cl
 
     def process_folder(folder_path, label):
         count = 0
-        for filename in sorted(os.listdir(folder_path)):
-            if filename.endswith(".png"):
+        for filename in sorted(os.listdir(folder_path)): #trie des images pour la reproductibilité
+            if filename.endswith(".png"): #pour éviter les fichiers non image
                 path = os.path.join(folder_path, filename)
-                combined_features = pre_traitement.transformer_image_en_features(path, image_size)
+                combined_features = pre_traitement.transformer_image_en_features(path, image_size) #pour récupérer les features de l'image
                 data.append(combined_features)
                 target.append(label)
 
@@ -83,23 +86,24 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
                 - hidden_layer_sizes : liste des tailles des couches cachées
     Retourne : listes de poids et biais pour chaque couche.
     """
-    if rng is None: rng = np.random.default_rng()
+    if rng is None: rng = np.random.default_rng() #utilisation d'un générateur de nombres aléatoires pour la reproductibilité
     L = 1 + len(hidden_layer_sizes)
     
     w = [np.zeros((0,0))]
     b = [np.zeros(0)]
 
-    w.append(rng.normal(0, np.sqrt(2 / n_feats), (hidden_layer_sizes[0], n_feats)))
-    b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[0]))  # Bruit léger pour init (Amélioration 2)
+    w.append(rng.normal(0, np.sqrt(2 / n_feats), (hidden_layer_sizes[0], n_feats))) # He initialization pour la première couche
+    b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[0]))  # ajout d'un léger bruit pour les biais pour éviter les symétries
     
-    for l in range(2, L):
-        fan_in = hidden_layer_sizes[l-2]
-        w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in)))
-        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))
+    for l in range(2, L): #couches cachées 
+        fan_in = hidden_layer_sizes[l-2] # nombre de neurones dans la couche précédente
+        w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in))) 
+        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))=
 
     fan_in = hidden_layer_sizes[L-2]
     w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
     b.append(rng.normal(0, 0.01, size=1))
+
     return w, b
 
 def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
@@ -118,14 +122,14 @@ def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
     masks = [None]
 
     for l in range(1, L+1):
-        z_l = np.matmul(w[l], a[l-1]) + b[l]
-        if l == L:
+        z_l = np.matmul(w[l], a[l-1]) + b[l] #calcul du pré-activation pour la couche l
+        if l == L: #couche de sortie avec sigmoïde pour obtenir une probabilité
             a_l = sigmoid(z_l)  
             mask = None
         else:
-            a_l = relu(z_l)      
+            a_l = relu(z_l) #activation ReLU pour les couches cachées    
             
-            if training and dropout_rate > 0.0:
+            if training and dropout_rate > 0.0: #application du dropout pendant l'entraînement
                 mask = (rng.random(a_l.shape) > dropout_rate).astype(float)
                 a_l = (a_l * mask) / (1.0 - dropout_rate)
             else:
@@ -144,9 +148,9 @@ def mlp_error_entropy(data, target, w, b):
     epsilon = 1e-15
     for x in range(len(data)):
         a, _ = eval_forward_relu(data[x], w, b) 
-        pred = np.clip(a[-1][0], epsilon, 1 - epsilon)
+        pred = np.clip(a[-1][0], epsilon, 1 - epsilon) #pour éviter log(0) qui est indéfini
         y = target[x]
-        e = - (y * np.log(pred) + (1-y) * np.log(1-pred))
+        e = - (y * np.log(pred) + (1-y) * np.log(1-pred)) 
         E += e
     return E / len(data)
 
@@ -167,14 +171,14 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
     Retourne : - w, b : poids et biais du modèle entraîné
                 - losses : liste des pertes (loss) à la fin de chaque époque
     """
-    rng = np.random.default_rng(random_state)
+    rng = np.random.default_rng(random_state) #générateur de nombres aléatoires pour la reproductibilité
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
 
     w, b = init_parameters(n_feats, hidden_layer_sizes, rng)
     losses = []
     
-    # --- MÉCANIQUE D'EARLY STOPPING ---
+    # Variables pour l'early stopping
     best_loss = np.inf
     patience_counter = 0
     best_w = None
@@ -337,20 +341,17 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         "confusion_matrix": mc_globale
     }
 
-def random_search_hyperparameters(
-    data,
-    target,
-    train_func,
-    predict_func,
-    hidden_layer_configs,
-    batch_sizes,
-    learning_rate_range=(0.001,0.05),
-    n_trials=8,
-    random_state=42
-):
+def random_search_hyperparameters(data, target, train_func, predict_func, hidden_layer_configs,
+    batch_sizes, learning_rate_range=(0.001,0.05), n_trials=8, random_state=42):
     """
-    Random search rapide compatible avec cross_validation().
-    Objectif: trouver une bonne config sans temps explosif.
+    Effectue une recherche aléatoire d'hyperparamètres pour le MLP en utilisant la validation croisée.
+    Arguments : - data, target : données et labels
+                - train_func, predict_func : fonctions d'entraînement et de prédiction
+                - hidden_layer_configs, batch_sizes : configurations possibles pour les couches cachées et la taille des batches
+                - learning_rate_range : plage de valeurs pour le taux d'apprentissage
+                - n_trials : nombre de configurations à tester
+                - random_state : graine pour la reproductibilité
+    Retourne : - la meilleure configuration trouvée et un résumé de tous les résultats
     """
 
     rng = np.random.default_rng(random_state)
@@ -430,6 +431,13 @@ def random_search_hyperparameters(
     return best_result, results
 
 def save_model(filename, w, b, mean_train, std_train, pca_comp, pca_mean):
+    """
+    Sauvegarde les paramètres du modèle (poids, biais, normalisation, PCA) dans un fichier .npz compressé.
+    Arguments : - filename : nom du fichier de sauvegarde
+                - w, b : poids et biais du modèle
+                - mean_train, std_train : paramètres de normalisation des données
+                - pca_comp, pca_mean : composantes et moyenne pour la PCA
+    """
     np.savez(filename, 
              w=np.array(w, dtype=object), 
              b=np.array(b, dtype=object), 
@@ -439,5 +447,8 @@ def save_model(filename, w, b, mean_train, std_train, pca_comp, pca_mean):
              pca_mean=pca_mean)
 
 def load_model(filename):
+    """
+    Charge les paramètres du modèle à partir d'un fichier .npz.
+    """
     params = np.load(filename, allow_pickle=True)
     return list(params["w"]), list(params["b"]), params["mean"], params["std"], params["pca_comp"], params["pca_mean"]
