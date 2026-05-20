@@ -40,7 +40,7 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
         statut = "SAINE (Non infectée)"
         couleur = "#2ca02c"  
         
-    plt.title(f"Diagnostic IA : {statut}\nProbabilité d'infection : {proba*100:.2f}%", 
+    plt.title(f"Diagnostic : {statut}\nProbabilité d'infection : {proba*100:.2f}%", 
               color=couleur, fontsize=14, fontweight='bold', pad=15)
     plt.tight_layout()
     plt.show()
