@@ -196,7 +196,6 @@ def RGB_to_HSV(images):
 
 # ============
 
-
 def watershed_region_count(images):
     """
     Applique une segmentation Watershed à une liste d'images
@@ -258,6 +257,17 @@ def watershed_region_count(images):
 # ============
 
 def extract_advanced_features(arr_rgb, arr_hsv):
+    """
+    Extrait des descripteurs avancés d'une image RGB et HSV.
+     - Variance du canal bleu
+     - Proportion de pixels violets (H entre 0.75 et 0.95)
+     - Moyenne de la saturation   
+     - Entropie du canal bleu
+     - Skewness du canal bleu
+     - Kurtosis du canal bleu
+     - Moyenne du gradient de texture
+     - Écart type du gradient de texture
+     """
     hue = arr_hsv[:, :, 0]
     saturation = arr_hsv[:, :, 1]
     blue_channel = arr_rgb[:, :, 2]
@@ -282,6 +292,8 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     std_gradient = np.std(gradient_mag)
 
     return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
+
+# ============
 
 def transformer_image_en_features(chemin_image, image_size):
     """Ouvre une image et la transforme en un vecteur prêt pour le réseau de neurones."""
