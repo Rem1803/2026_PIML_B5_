@@ -204,7 +204,7 @@ def mlp_error(data, target, w, b):
 # ==============================================================================================
     
 def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[64, 32],
-                             learning_rate=0.001, batch_size=32, random_state=42, patience=15):
+                             learning_rate=0.001, batch_size=32, random_state=42, patience=5):
     rng = np.random.default_rng(random_state)
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
@@ -371,93 +371,135 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5,
 
 
 def random_search_hyperparameters(
-    data, target,
-    train_func, predict_func,
+    data,
+    target,
+    train_func,
+    predict_func,
     hidden_layer_configs,
     batch_sizes,
-    learning_rate_range=(0.001, 0.05),
-    n_epochs_range=(30, 200),
+    learning_rate_range=(1e-4, 1e-2),
     n_trials=10,
-    n_folds=5,
     random_state=42,
-    verbose=False,
-    **train_kwargs
+    verbose=True
 ):
+    """
+    Random Search RAPIDE avec :
+    - 3-fold CV
+    - epochs fixes
+    - early stopping
+    - pruning des mauvais modèles
+    """
+
     rng = np.random.default_rng(random_state)
 
     results = []
     best_result = None
 
-    for t in range(n_trials):
+    # =========================
+    # SPEED SETTINGS
+    # =========================
 
-        hidden_layers = hidden_layer_configs[rng.integers(len(hidden_layer_configs))]
-        batch_size = batch_sizes[rng.integers(len(batch_sizes))]
+    n_folds = 3
+    n_epochs = 40
+    prune_threshold = 0.60
 
-        learning_rate = 10 ** rng.uniform(
-            np.log10(learning_rate_range[0]),
-            np.log10(learning_rate_range[1])
+    # =========================
+    # SUBSET RAPIDE
+    # =========================
+
+    max_samples = min(2000, len(data))
+
+    subset_idx = rng.choice(
+        len(data),
+        size=max_samples,
+        replace=False
+    )
+
+    data_small = data[subset_idx]
+    target_small = target[subset_idx]
+
+    for trial in range(n_trials):
+
+        hidden_layers = hidden_layer_configs[
+            rng.integers(len(hidden_layer_configs))
+        ]
+
+        batch_size = batch_sizes[
+            rng.integers(len(batch_sizes))
+        ]
+
+        learning_rate = np.exp(
+            rng.uniform(
+                np.log(learning_rate_range[0]),
+                np.log(learning_rate_range[1])
+            )
         )
-
-        n_epochs = rng.integers(n_epochs_range[0], n_epochs_range[1])
 
         if verbose:
             print(f"""
-Trial {t+1}/{n_trials}
-hidden_layers={hidden_layers}
-batch_size={batch_size}
-learning_rate={learning_rate:.5f}
-n_epochs={n_epochs}
+=========================
+TRIAL {trial+1}/{n_trials}
+=========================
+hidden_layers = {hidden_layers}
+batch_size    = {batch_size}
+learning_rate = {learning_rate:.5f}
 """)
 
+        # =========================
+        # CROSS VALIDATION
+        # =========================
+
         cv_result = cross_validation(
-            data,
-            target,
+            data_small,
+            target_small,
             train_func=train_func,
             predict_func=predict_func,
             n_folds=n_folds,
             n_epochs=n_epochs,
             learning_rate=learning_rate,
-            hidden_layer_sizes=hidden_layers,
             batch_size=batch_size,
-            random_state=random_state,
+            hidden_layer_sizes=hidden_layers,
             verbose=False,
-            **train_kwargs
+            random_state=random_state
         )
+
+        mean_acc = cv_result["mean"]
+
+        # =========================
+        # PRUNING
+        # =========================
+
+        if mean_acc < prune_threshold:
+
+            if verbose:
+                print(f"PRUNED : accuracy={mean_acc:.4f}")
+
+            continue
 
         result = {
             "hidden_layers": hidden_layers,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
-            "n_epochs": n_epochs,
-            "mean_accuracy": cv_result["mean"]
+            "mean_accuracy": mean_acc
         }
 
         results.append(result)
 
-        if best_result is None or result["mean_accuracy"] > best_result["mean_accuracy"]:
+        if verbose:
+            print(f"✅ accuracy={mean_acc:.4f}")
+
+        if (
+            best_result is None
+            or mean_acc > best_result["mean_accuracy"]
+        ):
             best_result = result
 
-    print("\n MEILLEURS PARAMÈTRES")
-    print(best_result)
+    print("\nBEST CONFIG ")
+
+    if best_result is not None:
+        print(best_result)
+    else:
+        print("Aucun modèle correct trouvé.")
 
     return best_result, results
-# ==========================================
-# Visualisation de l'évolution de la loss
-# ==========================================
 
-def plot_losses(losses, title="Evolution de la loss"):
-    """
-    Affiche le graphique de l'évolution de la loss.
-    
-    Parameters:
-    losses (list): Liste des losses pour chaque époque.
-    title (str): Titre du graphique.
-    """
-    plt.figure(figsize=(10, 5))
-    plt.plot(losses)
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title(title)
-    plt.grid(True, alpha=0.3)
-    plt.show()
-    

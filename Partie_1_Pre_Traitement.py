@@ -264,10 +264,21 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     
     variance = np.var(blue_channel)
     purple_mask = (hue > 0.75) & (hue < 0.95)
-    purple_proportion = np.mean(purple_mask) 
+    purple_proportion = np.mean(purple_mask)
     mean_saturation = np.mean(saturation)
     
     hist, _ = np.histogram(blue_channel.flatten(), bins=256, range=(0, 1))
-    entropy = stats.entropy(hist + 1e-9) 
+    entropy = stats.entropy(hist + 1e-9)
     skewness = stats.skew(blue_channel.flatten())
     kurtosis = stats.kurtosis(blue_channel.flatten())
+
+    # Texture analysis (Sobel-like finite differences)
+    gray = np.mean(arr_rgb, axis=2)
+    p = np.pad(gray, 1, mode='edge')
+    gx = (p[:-2, 2:] - p[:-2, :-2]) + 2 * (p[1:-1, 2:] - p[1:-1, :-2]) + (p[2:, 2:] - p[2:, :-2])
+    gy = (p[:-2, :-2] - p[2:, :-2]) + 2 * (p[:-2, 1:-1] - p[2:, 1:-1]) + (p[:-2, 2:] - p[2:, 2:])
+    gradient_mag = np.sqrt(gx**2 + gy**2)
+    mean_gradient = np.mean(gradient_mag)
+    std_gradient = np.std(gradient_mag)
+
+    return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
