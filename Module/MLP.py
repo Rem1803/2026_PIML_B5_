@@ -243,18 +243,13 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
 
     return w, b, losses
 
-def predict_relu(x, w, b, seuil=0.35):
-    """ 
-    Prédit la classe pour un échantillon donné en utilisant le modèle MLP avec activation ReLU.
-    Arguments : - x : vecteur d'entrée
-                - w, b : poids et biais du modèle
-                - seuil : seuil de décision pour classer en 0 ou 1
-    Retourne : - 1 si la probabilité prédite est supérieure ou égale au seuil, sinon 0
-    """
-    proba = eval_forward_relu(x, w, b)[-1][0]
-    if proba is None: return 0 
-    return 1 if proba >= seuil else 0
+def predict_proba_relu(x, w, b):
+    a, _ = eval_forward_relu(x, w, b)
+    return a[-1][0]
 
+def predict_relu(x, w, b, seuil=0.35):
+    proba = predict_proba_relu(x, w, b)
+    return 1 if proba >= seuil else 0
 
 def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01,
     batch_size=32, hidden_layer_sizes=[32,16], n_epochs=EPOCHS, random_state=42, seuil=0.5,
@@ -285,31 +280,36 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
 
+        #indices pour les données d'entraînement (tous les folds sauf le k-ième) et de test (le k-ième fold)
         test_idx = folds[k]
-        train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k])
-
+        train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k]) 
         X_train, y_train = data[train_idx], target[train_idx]
         X_test, y_test = data[test_idx], target[test_idx]
 
         mean_train = np.mean(X_train, axis=0)
         std_train = np.std(X_train, axis=0)
-        std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+        std_train = np.where(std_train < 1e-8, 1e-8, std_train) #pour éviter la division par zéro lors de la normalisation, on remplace les écarts-types très petits par une petite valeur fixe.
 
+        # Normalisation des données : on utilise la moyenne et l'écart-type calculés sur les données d'entraînement pour normaliser à la fois les données d'entraînement et de test, afin d'éviter toute fuite de données (data leakage) entre les folds.
         X_train_scaled = (X_train - mean_train) / std_train
         X_test_scaled = (X_test - mean_train) / std_train
 
+        # Clipping pour éviter les valeurs extrêmes qui pourraient causer des problèmes de convergence ou de saturation des activations, surtout avec ReLU qui
         X_train_scaled = np.clip(X_train_scaled, -5, 5)
         X_test_scaled = np.clip(X_test_scaled, -5, 5)
 
-        X_train_pixels, X_train_expert = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
-        X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
+        # Séparation des features d'image (pixels) et des features additionnelles pour appliquer la PCA uniquement sur les pixels, ce qui permet de réduire la dimensionnalité tout en conservant les informations pertinentes pour la classification.
+        X_train_pixels, X_train_additional = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
+        X_test_pixels, X_test_additionnal = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
 
-        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state)
-        X_train_pixels_pca = pca.fit_transform(X_train_pixels)
+        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state) #random_state pour la reproductibilité de la PCA
+        # Fit_transform sur les données d'entraînement pour apprendre la projection PCA et appliquer la transformation
+        X_train_pixels_pca = pca.fit_transform(X_train_pixels) 
         X_test_pixels_pca = pca.transform(X_test_pixels)
 
-        X_train_final = np.concatenate([X_train_pixels_pca, X_train_expert], axis=1)
-        X_test_final = np.concatenate([X_test_pixels_pca, X_test_expert], axis=1)
+        # Concatenation des features d'image réduites par PCA avec les features d'expert pour former les entrées finales du MLP, ce qui permet au modèle de bénéficier à la fois des informations extraites des images et des connaissances d'expert.
+        X_train_final = np.concatenate([X_train_pixels_pca, X_train_additional], axis=1)
+        X_test_final = np.concatenate([X_test_pixels_pca, X_test_additionnal], axis=1)
 
         w, b, losses = train_func(
             X_train_final, y_train,
