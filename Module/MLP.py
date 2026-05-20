@@ -24,7 +24,7 @@ MAX_IMAGES = 1000
 TAUX_APPRENTISSAGE = 0.01  
 BATCH_SIZE = 32
 EPOCHS = 150              
-PATIENCE = 5      
+PATIENCE = 10      
 SEUIL_DECISION = 0.35
 TAUX_DROPOUT = 0.2   
 LAMBDA_L2 = 0.0001   # Régularisation L2
@@ -244,10 +244,20 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
     return w, b, losses
 
 def predict_proba_relu(x, w, b):
+    """
+    Calcul la probabilité prédite par le MLP avec activations ReLU.
+    """
     a, _ = eval_forward_relu(x, w, b)
     return a[-1][0]
 
 def predict_relu(x, w, b, seuil=0.35):
+    """
+    Prédit la classe pour un échantillon donné en utilisant le modèle MLP avec activation ReLU.
+    Arguments : - x : vecteur d'entrée
+                - w, b : poids et biais du modèle
+                - seuil : seuil de décision pour classer en 0 ou 1
+    Retourne : - 1 si la probabilité prédite est supérieure ou égale au seuil, sinon 0
+    """
     proba = predict_proba_relu(x, w, b)
     return 1 if proba >= seuil else 0
 
@@ -307,7 +317,8 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         X_train_pixels_pca = pca.fit_transform(X_train_pixels) 
         X_test_pixels_pca = pca.transform(X_test_pixels)
 
-        # Concatenation des features d'image réduites par PCA avec les features d'expert pour former les entrées finales du MLP, ce qui permet au modèle de bénéficier à la fois des informations extraites des images et des connaissances d'expert.
+        # Concatenation des features d'image réduites par PCA avec les avec les features additionnelles pour former les entrées finales du MLP, ce qui permet au modèle  d'utiliser à la fois
+        # les informations principales des images et les caractéristiques calculées manuellement.
         X_train_final = np.concatenate([X_train_pixels_pca, X_train_additional], axis=1)
         X_test_final = np.concatenate([X_test_pixels_pca, X_test_additionnal], axis=1)
 
@@ -324,6 +335,7 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         )
 
         y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
+
 
         mc_fold = eval.matrice_confusion(y_test, y_pred)
         mc_globale['VP'] += mc_fold['VP']
