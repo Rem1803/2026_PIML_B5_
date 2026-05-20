@@ -34,8 +34,8 @@ COMPOSANTES_PCA = 50
 # Chemins des dossiers 
 # =======================
 
-UNINFECTED_PATH = r"Uninfected"
-PARASITIZED_PATH = r"Parasitized"
+UNINFECTED_PATH = r"Data\Uninfected"
+PARASITIZED_PATH = r"Data\Parasitized"
 
 # =======================
 # Fonctions utilitaires
@@ -98,7 +98,7 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
     for l in range(2, L): #couches cachées 
         fan_in = hidden_layer_sizes[l-2] # nombre de neurones dans la couche précédente
         w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in))) 
-        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))=
+        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))
 
     fan_in = hidden_layer_sizes[L-2]
     w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
@@ -156,7 +156,7 @@ def mlp_error_entropy(data, target, w, b):
 
 def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                              learning_rate=0.01, batch_size=32, random_state=42, 
-                             dropout_rate=0.2, patience=15, lambda_reg=0.0001):
+                             dropout_rate=0.2, patience=5, lambda_reg=0.0001):
     """
     Entraîne un MLP avec mini-batch gradient descent, activations ReLU, régularisation L2, et early stopping.
     Arguments : - data, target : données d'entraînement
@@ -187,7 +187,7 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
     for epoch in range(n_epochs):
         indices = rng.permutation(n_objs)
         for start in range(0, n_objs, batch_size):
-            batch_indices = indices[start:start + batch_size]
+            batch_indices = indices[start:start + batch_size] #
             current_batch_size = len(batch_indices)
 
             grad_w = [np.zeros_like(w_l) for w_l in w]
@@ -197,30 +197,30 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
                 a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True, rng=rng)
                 err = [None] * (L + 1)
                 
-                err[-1] = a[-1] - target[i]
+                err[-1] = a[-1] - target[i] #erreur de la couche de sortie (probabilité prédite - label réel)
                 
                 for l in range(L-1, 0, -1):
                     da = (a[l] > 0).astype(float)
                     if masks[l] is not None:
-                        da = (da * masks[l]) / (1.0 - dropout_rate)
+                        da = (da * masks[l]) / (1.0 - dropout_rate) #ajustement du gradient pour le dropout
                     
                     err_next = err[l+1]
-                    err[l] = np.matmul(w[l+1].T, err_next) * da
+                    err[l] = np.matmul(w[l+1].T, err_next) * da #calcul de l'erreur pour la couche l en utilisant la règle de la chaîne et en tenant compte de l'activation ReLU et du dropout
                 
                 for l in range(1, L + 1):
-                    grad_w[l] += np.outer(err[l], a[l-1])
+                    grad_w[l] += np.outer(err[l], a[l-1]) #gradient de la perte par rapport aux poids de la couche l
                     grad_b[l] += err[l]
 
             for l in range(1, L + 1):
-                # Mise à jour avec Régularisation L2 (Amélioration 2)
+                # Mise à jour avec Régularisation L2 
                 w[l] -= learning_rate * (grad_w[l] / current_batch_size + lambda_reg * w[l])
                 b[l] -= learning_rate * (grad_b[l] / current_batch_size)
 
-        # Calcul de l'erreur en fin d'époque (sans dropout)
+        # Calcul de l'erreur en fin d'époque 
         loss = mlp_error_entropy(data, target, w, b)
         losses.append(loss)
         
-        # --- VÉRIFICATION EARLY STOPPING ---
+        # Early Stopping : on sauvegarde les meilleurs poids et biais si la loss s'améliore, sinon on incrémente le compteur de patience
         if loss < best_loss:
             best_loss = loss
             patience_counter = 0
@@ -228,14 +228,15 @@ def mlp_fit_minibatch(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
             best_b = [b_i.copy() for b_i in b]
         else:
             patience_counter += 1
-            
+        
+        # Si le compteur de patience atteint le seuil, on arrête l'entraînement et on restaure les meilleurs poids et biais
         if patience_counter >= patience:
             print(f"    -> Early Stopping à l'époque {epoch+1} (Loss opt: {best_loss:.4f})")
             w = [w_i.copy() for w_i in best_w]
             b = [b_i.copy() for b_i in best_b]
             break
 
-    # Si on n'a jamais déclenché le break, on s'assure de renvoyer le meilleur
+    # Si l'entraînement s'est terminé normalement sans atteindre le nombre maximum d'époques, on restaure les meilleurs poids et biais trouvés pendant l'entraînement
     if patience_counter < patience:
         w = [w_i.copy() for w_i in best_w]
         b = [b_i.copy() for b_i in best_b]
@@ -273,13 +274,13 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
     indices = np.arange(len(data))
     np.random.seed(random_state)
-    np.random.shuffle(indices)
+    np.random.shuffle(indices) # mélange des indices pour créer des folds aléatoires
     folds = np.array_split(indices, n_folds)
 
     accuracies = []
-    mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0}
+    mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0} #initialisation de la matrice de confusion globale pour accumuler les résultats de tous les folds
 
-    n_pixels = data.shape[1] - 8
+    n_pixels = data.shape[1] - 8 
 
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
