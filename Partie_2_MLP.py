@@ -34,11 +34,11 @@ TAUX_DROPOUT = 0.2
 LAMBDA_L2 = 0.0001         # Régularisation L2
 COMPOSANTES_PCA = 50       
 
-# Chemins des dossiers (à adapter si besoin)
+# Chemins des dossiers 
 UNINFECTED_PATH = r"Uninfected"
 PARASITIZED_PATH = r"Parasitized"
 
-def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
+def load_images(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
     data = []
     target = []
 
@@ -47,7 +47,7 @@ def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_pe
         for filename in sorted(os.listdir(folder_path)):
             if filename.endswith(".png"):
                 path = os.path.join(folder_path, filename)
-                combined_features = transformer_image_en_features(path, image_size)
+                combined_features = pre_traitement.transformer_image_en_features(path, image_size)
                 data.append(combined_features)
                 target.append(label)
 
@@ -216,12 +216,27 @@ def predict_relu(x, w, b, seuil=0.5):
 # Etape 5 : Évaluation, Métriques, et Gestion du Modèle
 # ==============================================================================================
 
-def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01, random_state=42, seuil=0.5, dropout_rate=0.0):
+def cross_validation(
+    data,
+    target,
+    train_func,
+    predict_func,
+    n_folds=5,
+    learning_rate=0.01,
+    batch_size=32,
+    hidden_layer_sizes=[32,16],
+    n_epochs=EPOCHS,
+    random_state=42,
+    seuil=0.5,
+    dropout_rate=0.0
+):
+    """Effectue une cross-validation K-fold et retourne les performances globales."""
+
     indices = np.arange(len(data))
-    np.random.seed(random_state) 
+    np.random.seed(random_state)
     np.random.shuffle(indices)
     folds = np.array_split(indices, n_folds)
-    
+
     accuracies = []
     mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0}
 
@@ -229,56 +244,64 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
+
         test_idx = folds[k]
         train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k])
 
         X_train, y_train = data[train_idx], target[train_idx]
         X_test, y_test = data[test_idx], target[test_idx]
 
-        # 1. Normalisation Globale Sécurisée
         mean_train = np.mean(X_train, axis=0)
         std_train = np.std(X_train, axis=0)
-        std_train = np.where(std_train < 1e-8, 1e-8, std_train) # Amélioration Sécurité 1
-        
+        std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+
         X_train_scaled = (X_train - mean_train) / std_train
         X_test_scaled = (X_test - mean_train) / std_train
-        
-        # 2. Clipping pour écrêter les valeurs extrêmes (Amélioration Sécurité 2)
+
         X_train_scaled = np.clip(X_train_scaled, -5, 5)
         X_test_scaled = np.clip(X_test_scaled, -5, 5)
 
-        # 3. Séparation Pixels / Features expertes
         X_train_pixels, X_train_expert = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
         X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
 
-        # 4. ACP (PCA) Ciblée UNIQUEMENT sur les pixels
         pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state)
         X_train_pixels_pca = pca.fit_transform(X_train_pixels)
         X_test_pixels_pca = pca.transform(X_test_pixels)
 
-        # 5. Recombinaison finale
         X_train_final = np.concatenate([X_train_pixels_pca, X_train_expert], axis=1)
         X_test_final = np.concatenate([X_test_pixels_pca, X_test_expert], axis=1)
 
-        # 6. Entraînement et Prédiction
-        w, b, losses = train_func(X_train_final, y_train, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16], 
-                                  learning_rate=learning_rate, batch_size=BATCH_SIZE, random_state=random_state, 
-                                  dropout_rate=dropout_rate, patience=PATIENCE, lambda_reg=LAMBDA_L2)
+        w, b, losses = train_func(
+            X_train_final, y_train,
+            n_epochs=n_epochs,
+            hidden_layer_sizes=hidden_layer_sizes,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            random_state=random_state,
+            dropout_rate=dropout_rate,
+            patience=PATIENCE,
+            lambda_reg=LAMBDA_L2
+        )
 
         y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
-        
+
         mc_fold = eval.matrice_confusion(y_test, y_pred)
         mc_globale['VP'] += mc_fold['VP']
         mc_globale['VN'] += mc_fold['VN']
         mc_globale['FP'] += mc_fold['FP']
         mc_globale['FN'] += mc_fold['FN']
-        
-        accuracy = eval.exactitude(mc_fold)
-        accuracies.append(accuracy)
-        print(f"Accuracy du fold : {accuracy:.4f} | Loss finale : {losses[-1]:.4f}")
 
-    print(f"\nAccuracy moyenne Cross-Validation : {np.mean(accuracies):.4f}")
-    return mc_globale
+        acc = eval.exactitude(mc_fold)
+        accuracies.append(acc)
+
+        print(f"Accuracy fold {k+1} : {acc:.4f} | Loss : {losses[-1]:.4f}")
+
+    print(f"\nAccuracy moyenne : {np.mean(accuracies):.4f}")
+
+    return {
+        "mean": np.mean(accuracies),
+        "confusion_matrix": mc_globale
+    }
 
 def random_search_hyperparameters(
     data,
@@ -287,17 +310,13 @@ def random_search_hyperparameters(
     predict_func,
     hidden_layer_configs,
     batch_sizes,
-    learning_rate_range=(1e-4, 1e-2),
-    n_trials=10,
-    random_state=42,
-    verbose=True
+    learning_rate_range=(0.001,0.05),
+    n_trials=8,
+    random_state=42
 ):
     """
-    Random Search RAPIDE avec :
-    - 3-fold CV
-    - epochs fixes
-    - early stopping
-    - pruning des mauvais modèles
+    Random search rapide compatible avec cross_validation().
+    Objectif: trouver une bonne config sans temps explosif.
     """
 
     rng = np.random.default_rng(random_state)
@@ -305,28 +324,10 @@ def random_search_hyperparameters(
     results = []
     best_result = None
 
-    # =========================
     # SPEED SETTINGS
-    # =========================
-
-    n_folds = 3
-    n_epochs = 40
-    prune_threshold = 0.60
-
-    # =========================
-    # SUBSET RAPIDE
-    # =========================
-
-    max_samples = min(2000, len(data))
-
-    subset_idx = rng.choice(
-        len(data),
-        size=max_samples,
-        replace=False
-    )
-
-    data_small = data[subset_idx]
-    target_small = target[subset_idx]
+    n_folds = 3          # rapide
+    n_epochs = 60        # suffisant avec early stopping
+    prune_threshold = 0.55  # un peu plus permissif
 
     for trial in range(n_trials):
 
@@ -338,30 +339,26 @@ def random_search_hyperparameters(
             rng.integers(len(batch_sizes))
         ]
 
-        learning_rate = np.exp(
-            rng.uniform(
-                np.log(learning_rate_range[0]),
-                np.log(learning_rate_range[1])
+        learning_rate = float(
+            np.exp(
+                rng.uniform(
+                    np.log(learning_rate_range[0]),
+                    np.log(learning_rate_range[1])
+                )
             )
         )
 
-        if verbose:
-            print(f"""
-=========================
-TRIAL {trial+1}/{n_trials}
-=========================
-hidden_layers = {hidden_layers}
-batch_size    = {batch_size}
-learning_rate = {learning_rate:.5f}
-""")
+        print("\n====================")
+        print(f"TRIAL {trial+1}/{n_trials}")
+        print("====================")
+        print(f"hidden_layers : {hidden_layers}")
+        print(f"batch_size    : {batch_size}")
+        print(f"learning_rate : {learning_rate:.6f}")
 
-        # =========================
-        # CROSS VALIDATION
-        # =========================
-
+        #  CROSS VALIDATION
         cv_result = cross_validation(
-            data_small,
-            target_small,
+            data,
+            target,
             train_func=train_func,
             predict_func=predict_func,
             n_folds=n_folds,
@@ -369,21 +366,16 @@ learning_rate = {learning_rate:.5f}
             learning_rate=learning_rate,
             batch_size=batch_size,
             hidden_layer_sizes=hidden_layers,
-            verbose=False,
             random_state=random_state
         )
 
         mean_acc = cv_result["mean"]
 
-        # =========================
-        # PRUNING
-        # =========================
+        print(f"→ accuracy = {mean_acc:.4f}")
 
+        # pruning simple
         if mean_acc < prune_threshold:
-
-            if verbose:
-                print(f"PRUNED : accuracy={mean_acc:.4f}")
-
+            print("PRUNED")
             continue
 
         result = {
@@ -395,21 +387,11 @@ learning_rate = {learning_rate:.5f}
 
         results.append(result)
 
-        if verbose:
-            print(f"✅ accuracy={mean_acc:.4f}")
-
-        if (
-            best_result is None
-            or mean_acc > best_result["mean_accuracy"]
-        ):
+        if best_result is None or mean_acc > best_result["mean_accuracy"]:
             best_result = result
 
-    print("\nBEST CONFIG ")
-
-    if best_result is not None:
-        print(best_result)
-    else:
-        print("Aucun modèle correct trouvé.")
+    print("\n BEST CONFIG:")
+    print(best_result if best_result else "Aucune config correcte trouvée")
 
     return best_result, results
 
