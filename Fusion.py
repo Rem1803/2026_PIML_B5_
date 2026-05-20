@@ -25,80 +25,9 @@ LAMBDA_L2 = 0.0001         # Régularisation L2
 COMPOSANTES_PCA = 50       
 
 # Chemins des dossiers (à adapter si besoin)
-UNINFECTED_PATH = r"C:\Users\noevm\Documents\INSA_Lyon\3A_2025-2026\S2\UE3_PIML\Projet\cell_images\Uninfected"
-PARASITIZED_PATH = r"C:\Users\noevm\Documents\INSA_Lyon\3A_2025-2026\S2\UE3_PIML\Projet\cell_images\Parasitized"
+UNINFECTED_PATH = r"Uninfected"
+PARASITIZED_PATH = r"Parasitized"
 
-
-# ==============================================================================================
-# Etape 2 : Exploration Visuelle (EDA)
-# ==============================================================================================
-
-def plot_image_grid(uninfected_dir, parasitized_dir, n_images_per_class=8):
-    uninfected_files = [f for f in os.listdir(uninfected_dir) if f.endswith('.png')]
-    parasitized_files = [f for f in os.listdir(parasitized_dir) if f.endswith('.png')]
-    
-    s_uninfected = random.sample(uninfected_files, min(n_images_per_class, len(uninfected_files)))
-    s_parasitized = random.sample(parasitized_files, min(n_images_per_class, len(parasitized_files)))
-    
-    fig, axes = plt.subplots(4, 4, figsize=(10, 10))
-    fig.suptitle('Comparaison : Globules Sains (Gauche) vs Infectés (Droite)', fontsize=16)
-    
-    for i in range(4):
-        for j in range(4):
-            ax = axes[i, j]
-            ax.axis('off')
-            if j < 2:
-                idx = i * 2 + j
-                if idx < len(s_uninfected):
-                    img = Image.open(os.path.join(uninfected_dir, s_uninfected[idx]))
-                    ax.imshow(img)
-                    if i == 0 and j == 0: ax.set_title("Sain")
-            else:
-                idx = i * 2 + (j - 2)
-                if idx < len(s_parasitized):
-                    img = Image.open(os.path.join(parasitized_dir, s_parasitized[idx]))
-                    ax.imshow(img)
-                    if i == 0 and j == 2: ax.set_title("Infecté (Parasité)")
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.92)
-    plt.show()
-    plt.close()
-
-def plot_color_histograms(uninfected_dir, parasitized_dir, sample_size=100):
-    uninfected_files = [f for f in os.listdir(uninfected_dir) if f.endswith('.png')]
-    parasitized_files = [f for f in os.listdir(parasitized_dir) if f.endswith('.png')]
-    
-    s_uninfected = random.sample(uninfected_files, min(sample_size, len(uninfected_files)))
-    s_parasitized = random.sample(parasitized_files, min(sample_size, len(parasitized_files)))
-    
-    hue_uninfected, blue_uninfected = [], []
-    hue_parasitized, blue_parasitized = [], []
-    
-    for f in s_uninfected:
-        img = np.array(Image.open(os.path.join(uninfected_dir, f)).convert('RGB')) / 255.0
-        hsv_img = rgb_to_hsv(img)
-        hue_uninfected.extend(hsv_img[:, :, 0].flatten())
-        blue_uninfected.extend(img[:, :, 2].flatten()) 
-        
-    for f in s_parasitized:
-        img = np.array(Image.open(os.path.join(parasitized_dir, f)).convert('RGB')) / 255.0
-        hsv_img = rgb_to_hsv(img)
-        hue_parasitized.extend(hsv_img[:, :, 0].flatten())
-        blue_parasitized.extend(img[:, :, 2].flatten()) 
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    ax1.hist(blue_uninfected, bins=50, alpha=0.5, label='Sain', color='green', density=True)
-    ax1.hist(blue_parasitized, bins=50, alpha=0.5, label='Infecté', color='red', density=True)
-    ax1.set_title("Distribution du canal Bleu (RGB)")
-    ax1.legend()
-    
-    ax2.hist(hue_uninfected, bins=50, alpha=0.5, label='Sain', color='green', density=True)
-    ax2.hist(hue_parasitized, bins=50, alpha=0.5, label='Infecté', color='red', density=True)
-    ax2.set_title("Distribution de la Teinte (HSV)")
-    ax2.legend()
-    plt.tight_layout()
-    plt.show()
-    plt.close()
 
 
 # ==============================================================================================
@@ -155,7 +84,7 @@ def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_pe
 
     def process_folder(folder_path, label):
         count = 0
-        for filename in os.listdir(folder_path):
+        for filename in sorted(os.listdir(folder_path)):
             if filename.endswith(".png"):
                 path = os.path.join(folder_path, filename)
                 combined_features = transformer_image_en_features(path, image_size)
