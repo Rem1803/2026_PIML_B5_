@@ -202,11 +202,10 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
 
     fan_in = hidden_layer_sizes[L-2]
     w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
-    b.append(np.normal(0, 0.01, size=1) if hasattr(np, 'normal') else rng.normal(0, 0.01, size=1))
-
+    b.append(rng.normal(0, 0.01, size=1))
     return w, b
 
-def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False):
+def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
     L = len(w) - 1
     a = [np.copy(x)] 
     masks = [None]
@@ -220,7 +219,7 @@ def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False):
             a_l = relu(z_l)      
             
             if training and dropout_rate > 0.0:
-                mask = (np.random.rand(*a_l.shape) > dropout_rate).astype(float)
+                mask = (rng.random(a_l.shape) > dropout_rate).astype(float)
                 a_l = (a_l * mask) / (1.0 - dropout_rate)
             else:
                 mask = None
@@ -267,7 +266,7 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[32, 
             grad_b = [np.zeros_like(b_l) for b_l in b]
 
             for i in batch_indices:
-                a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True)
+                a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True, rng=rng)
                 err = [None] * (L + 1)
                 
                 err[-1] = a[-1] - target[i]
@@ -364,7 +363,7 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
 
         # 4. ACP (PCA) Ciblée UNIQUEMENT sur les pixels
-        pca = PCA(n_components=COMPOSANTES_PCA)
+        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state)
         X_train_pixels_pca = pca.fit_transform(X_train_pixels)
         X_test_pixels_pca = pca.transform(X_test_pixels)
 
