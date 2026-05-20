@@ -1,7 +1,6 @@
 Projet PIML
 
 
-==================
     Objectifs :
 ==================
 Le projet consiste en l'implémentation d'un workflow pour classer des images de cellules.
@@ -9,7 +8,6 @@ Le but est de différencier les cellules saines et les cellules infectées par l
 Pour cela nous utiliserons un mélange d'algorithmes de traitement d'image, d'algorithme de machine learning et de visualisation de performance.
 
 
-================================
     Présentation des datas :
 ================================
 (source, taille, contexte)
@@ -27,7 +25,6 @@ A première vue, les cellules du dossier infectées par la Malaria se différenc
 Pour des raisons d'espace de stockage Git et de rapidité d'exécution, nous n'utiliserons que 2000 éléments de notre dataset (1000 de chaque dossier)
 
 
-===================================================
     Aperçu du workflow / intuition du processus
 ===================================================
 (les différentes étapes : input, output, process...)
@@ -53,7 +50,6 @@ La troisième partie a pour but de valider la robustesse de notre meilleur modè
 Une attention toute particulière est accordée au Rappel et à la matrice de confusion globale. En effet, dans le cadre du diagnostic de la malaria, il est vital de minimiser les Faux Négatifs (déclarer saine une cellule infectée).
 
 
-=====================================
     Instructions d'installation :
 =====================================
 (qu'est-ce que ça nécessite ? Peut-il tourner sur Linux VM)
@@ -64,7 +60,6 @@ Pour fonctionner, notre workflow utilise plusieurs bibliothèques de fonctions P
 Une fois cela fait, il faut télécharger l'intégralité des fichiers présents sur le Git et les placer dans un même dossier sur la machine.
 
 
-===================================
     Comment exécuter une démo :
 ===================================
 (moins de 10min de temps d'éxécution sur Linux VM)
@@ -75,12 +70,4 @@ Une fois cela fait, il faut télécharger l'intégralité des fichiers présents
 
 - Exécuter les 2e et 3e cellules de code pour charger le dataset utilisé et afficher quelque exemples d'images de cellules saines et infectées par la malaria
 
-- Exécuter les 4e, 5e et 6e cellules de code pour faire tourner le modèle simple de MLP et afficher les résulats (précision, perte, ...)
-
-- Exécuter les 7e, 8e et 9e cellules de code pour faire tourner le modème MLP avec ReLU et afficher les résultats (précision, perte, ...)
-
-- Exécuter les 10e, 11e et 12e cellules de code pour faire tourner le modème MLP avec Binary Cross Entropy et afficher les résultats (précision, perte, ...)
-
-- Exécuter les 13e, 14e et 15e cellules de code pour faire tourner le modème MLP avec DropOut et afficher les résultats (précision, perte, ...)
-
-- Exécuter les 16e, 17e et 18e cellules de code pour faire tourner le modème MLP avec mini-Batch gradient et afficher les résultats (précision, perte, ...)
+- Exécuter
