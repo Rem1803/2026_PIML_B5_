@@ -251,6 +251,7 @@ def predict_relu(x, w, b, seuil=0.35):
     Retourne : - 1 si la probabilité prédite est supérieure ou égale au seuil, sinon 0
     """
     proba = eval_forward_relu(x, w, b)[-1][0]
+    if proba is None: return 0 
     return 1 if proba >= seuil else 0
 
 
