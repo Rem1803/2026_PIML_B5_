@@ -2,8 +2,8 @@
 Chargement des données, implémentation du modèle MLP Mini-batch gradient descent avec activations ReLU, fonctions de coût,
 fonctions de prédiction associées, cross-validation pour évaluer les modèles, sauvegarde des modèles entraînés.
 """
-import Pre_traitement as pre_traitement
-import Evaluation as eval
+import Module.Pre_traitement as pre_traitement
+import Module.Evaluation as eval
 
 import os
 import random

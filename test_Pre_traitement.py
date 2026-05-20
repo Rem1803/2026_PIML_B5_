@@ -1,5 +1,5 @@
 
-from Pre_traitement import watershed_region_count
+from Module.Pre_traitement import watershed_region_count
 
 
 def test_standardize_images():

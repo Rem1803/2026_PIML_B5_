@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import os
 import random
 from PIL import Image
-import Pre_traitement as pre_traitement
-import Evaluation as eval
+import Module.Pre_traitement as pre_traitement
+import Module.Evaluation as eval
 from sklearn.decomposition import PCA
 
 def plot_image_grid(uninfected_dir, parasitized_dir, n_images_per_class=8):
