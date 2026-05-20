@@ -10,210 +10,140 @@ fonctions de prédiction associées, cross-validation pour évaluer les modèles
 et visualtisation des courbes d'apprentissage.
 """
 import Partie_1_Pre_Traitement as pre_traitement
+import Partie_3_Evaluation as eval
 
-# ==============================================================================================
-# Chargement des images 
-# ==============================================================================================
+import os
+import random
+import numpy as np
+import scipy.stats as stats
+import matplotlib.pyplot as plt
+import shutil
+from matplotlib.colors import rgb_to_hsv
+from PIL import Image
+from sklearn.decomposition import PCA
 
-def load_images(
-    uninfected,
-    parasitized,
-    image_size=(32, 32),
-    max_per_class=1000,
-    return_combined_features=False
-):
-    """
-    Charge et prétraite les images de deux classes pour l'entraînement.
+# --- CONFIGURATION ---
+TAILLE_IMAGE = (32, 32)    
+MAX_IMAGES = 1000           
+TAUX_APPRENTISSAGE = 0.01  
+BATCH_SIZE = 32
+EPOCHS = 150               # Augmenté car l'Early Stopping arrêtera le modèle au bon moment
+PATIENCE = 15              # Nombre d'époques sans amélioration avant arrêt
+SEUIL_DECISION = 0.35
+TAUX_DROPOUT = 0.2   
+LAMBDA_L2 = 0.0001         # Régularisation L2
+COMPOSANTES_PCA = 50       
 
-    Args:
-        uninfected (str): chemin du dossier des images non infectées.
-        parasitized (str): chemin du dossier des images infectées.
-        image_size (tuple): taille de redimensionnement des images.
-        max_per_class (int): nombre maximal d'images par classe.
-        return_combined_features (bool): retourne aussi les features combinées.
+# Chemins des dossiers (à adapter si besoin)
+UNINFECTED_PATH = r"Uninfected"
+PARASITIZED_PATH = r"Parasitized"
 
-    Returns:
-        tuple:
-            - data (np.ndarray): vecteurs de features.
-            - target (np.ndarray): labels.
-            - combined_features (optionnel)
-    """
-
-    images = []
+def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_per_class=200):
+    data = []
     target = []
 
-    # Chargement des images
-    for folder, label in [(uninfected, 0), (parasitized, 1)]:
-
+    def process_folder(folder_path, label):
         count = 0
-
-        for filename in os.listdir(folder):
-
-            if filename.lower().endswith(".png"):
-
-                path = os.path.join(folder, filename)
-
-                img = Image.open(path).convert("RGB")
-                arr = np.array(img)
-
-                images.append(arr)
+        for filename in sorted(os.listdir(folder_path)):
+            if filename.endswith(".png"):
+                path = os.path.join(folder_path, filename)
+                combined_features = transformer_image_en_features(path, image_size)
+                data.append(combined_features)
                 target.append(label)
 
                 count += 1
+                if count == max_per_class: break
 
-                if count >= max_per_class:
-                    break
+    process_folder(uninfected_dir, 0)
+    process_folder(parasitized_dir, 1)
 
-    # Prétraitement
-    resized_images = pre_traitement.resize_images(
-        images,
-        target_size=image_size
-    )
-
-    hsv_images = pre_traitement.RGB_to_HSV(resized_images)
-
-    combined_features_list = []
-
-    # Extraction des features
-    for rgb_img, hsv_img in zip(resized_images, hsv_images):
-
-        arr_rgb = rgb_img.astype(np.float32) / 255.0
-
-        # Features avancées
-        advanced_feats = pre_traitement.extract_advanced_features(
-            arr_rgb,
-            hsv_img
-        )
-
-        # Sécurisation
-        advanced_feats = np.asarray(
-            advanced_feats,
-            dtype=np.float32
-        ).flatten()
-
-        # Remplace les None éventuels
-        advanced_feats = np.array([
-            0 if feat is None else feat
-            for feat in advanced_feats
-        ], dtype=np.float32)
-
-        # Remplace les Nan éventuels
-        advanced_feats = np.nan_to_num(
-        advanced_feats,
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0)
-
-        # Feature H*S
-        arr_feature = hsv_img[:, :, 0] * hsv_img[:, :, 1]
-
-        # Concaténation
-        combined_features = np.concatenate([
-            arr_feature.flatten(),
-            advanced_feats
-        ])
-
-        combined_features_list.append(combined_features)
-
-    # Conversion finale
-    data = np.asarray(combined_features_list, dtype=np.float32)
-    target = np.asarray(target, dtype=np.int32)
-
-    if return_combined_features:
-        return data, target, combined_features_list
-
-    return data, target
+    X_brut = np.array(data)
+    y = np.array(target)
+    
+    return X_brut, y
 
 
 # ==============================================================================================
-# Modèle simple avec la fonction sigmoïde
+# Etape 4 : Le Modèle Mathématique (MLP)
 # ==============================================================================================
 
 def sigmoid(z):
-    """Sigmoid activation function.
-
-    Applies elementwise on scalars or NumPy arrays.
-
-    Args:
-        z: input value or array
-
-    Returns:
-        Sigmoid(z) computed elementwise.
-    """
-    # np.clip évite l'overflow dans l'exponentielle
     z = np.clip(z, -500, 500)
-    return 1/(1 + np.exp(-z))
-
-
-
-def init_parameters(n_feats, hidden_layer_sizes, rng=None):
-    if rng is None:
-        rng = np.random.default_rng()
-
-    L = len(hidden_layer_sizes) + 1
-
-    w = [None]
-    b = [None]
-
-    prev = n_feats
-
-    for h in hidden_layer_sizes:
-        w.append(rng.normal(0, np.sqrt(2 / prev), (h, prev)))
-        b.append(rng.normal(0, 0.01, size=h))
-        prev = h
-
-    w.append(rng.normal(0, np.sqrt(2 / prev), (1, prev)))
-    b.append(rng.normal(0, 0.01, size=1))
-
-    return w, b
-# ==============================================================================================
-# Modèle amélioré avec la fonction ReLu sur les couches cachées
-# ==============================================================================================
+    return 1 / (1 + np.exp(-z))
 
 def relu(z):
-    return np.maximum(0,z)
+    return np.maximum(0, z)
 
-def eval_forward(x, w, b):
+def init_parameters(n_feats, hidden_layer_sizes, rng=None):
+    if rng is None: rng = np.random.default_rng()
+    L = 1 + len(hidden_layer_sizes)
+    
+    w = [np.zeros((0,0))]
+    b = [np.zeros(0)]
+
+    w.append(rng.normal(0, np.sqrt(2 / n_feats), (hidden_layer_sizes[0], n_feats)))
+    b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[0]))  # Bruit léger pour init (Amélioration 2)
+    
+    for l in range(2, L):
+        fan_in = hidden_layer_sizes[l-2]
+        w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in)))
+        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))
+
+    fan_in = hidden_layer_sizes[L-2]
+    w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
+    b.append(rng.normal(0, 0.01, size=1))
+    return w, b
+
+def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=None):
     L = len(w) - 1
     a = [np.copy(x)] 
+    masks = [None]
 
     for l in range(1, L+1):
         z_l = np.matmul(w[l], a[l-1]) + b[l]
         if l == L:
-            a_l = sigmoid(z_l)   # Sortie
+            a_l = sigmoid(z_l)  
+            mask = None
         else:
-            a_l = relu(z_l)      # Couches cachées
+            a_l = relu(z_l)      
+            
+            if training and dropout_rate > 0.0:
+                mask = (rng.random(a_l.shape) > dropout_rate).astype(float)
+                a_l = (a_l * mask) / (1.0 - dropout_rate)
+            else:
+                mask = None
+                
         a.append(a_l)
-    return a 
+        masks.append(mask)
+        
+    return a, masks
 
-
-def mlp_error(data, target, w, b):
-    '''Binary Cross Entropy Globale'''
+def mlp_error_entropy(data, target, w, b):
     E = 0
     epsilon = 1e-15
     for x in range(len(data)):
-        a = eval_forward(data[x], w, b)
+        a, _ = eval_forward_relu(data[x], w, b) 
         pred = np.clip(a[-1][0], epsilon, 1 - epsilon)
         y = target[x]
         e = - (y * np.log(pred) + (1-y) * np.log(1-pred))
         E += e
-    return E / len(data) # Moyenne de la loss
- 
-# ==============================================================================================
-# Modèle amélioré avec mini-batch gradient descent
-# ==============================================================================================
-    
-def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[64, 32],
-                             learning_rate=0.001, batch_size=32, random_state=42, patience=5):
+    return E / len(data)
+
+def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
+                             learning_rate=0.01, batch_size=32, random_state=42, 
+                             dropout_rate=0.2, patience=15, lambda_reg=0.0001):
     rng = np.random.default_rng(random_state)
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
-    lambda_reg = 0.0001
 
     w, b = init_parameters(n_feats, hidden_layer_sizes, rng)
     losses = []
+    
+    # --- MÉCANIQUE D'EARLY STOPPING ---
     best_loss = np.inf
     patience_counter = 0
+    best_w = None
+    best_b = None
 
     for epoch in range(n_epochs):
         indices = rng.permutation(n_objs)
@@ -225,15 +155,16 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[64, 
             grad_b = [np.zeros_like(b_l) for b_l in b]
 
             for i in batch_indices:
-                a = eval_forward(data[i], w, b)
+                a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True, rng=rng)
                 err = [None] * (L + 1)
                 
-                # Erreur en sortie (BCE + Sigmoïde)
                 err[-1] = a[-1] - target[i]
                 
-                # Backpropagation (ReLU)
                 for l in range(L-1, 0, -1):
                     da = (a[l] > 0).astype(float)
+                    if masks[l] is not None:
+                        da = (da * masks[l]) / (1.0 - dropout_rate)
+                    
                     err_next = err[l+1]
                     err[l] = np.matmul(w[l+1].T, err_next) * da
                 
@@ -242,133 +173,112 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[64, 
                     grad_b[l] += err[l]
 
             for l in range(1, L + 1):
-                w[l] -= learning_rate * (grad_w[l] / current_batch_size + lambda_reg * w[l])    
+                # Mise à jour avec Régularisation L2 (Amélioration 2)
+                w[l] -= learning_rate * (grad_w[l] / current_batch_size + lambda_reg * w[l])
                 b[l] -= learning_rate * (grad_b[l] / current_batch_size)
 
-        loss = mlp_error(data, target, w, b)
+        # Calcul de l'erreur en fin d'époque (sans dropout)
+        loss = mlp_error_entropy(data, target, w, b)
         losses.append(loss)
+        
+        # --- VÉRIFICATION EARLY STOPPING ---
         if loss < best_loss:
             best_loss = loss
             patience_counter = 0
-            best_w = [w_i.copy() if w_i is not None else None for w_i in w]
-            best_b = [b_i.copy() if b_i is not None else None for b_i in b]
+            best_w = [w_i.copy() for w_i in w]
+            best_b = [b_i.copy() for b_i in b]
         else:
             patience_counter += 1
-
+            
         if patience_counter >= patience:
-            w, b = best_w, best_b
+            print(f"    -> Early Stopping à l'époque {epoch+1} (Loss opt: {best_loss:.4f})")
+            w = [w_i.copy() for w_i in best_w]
+            b = [b_i.copy() for b_i in best_b]
             break
+
+    # Si on n'a jamais déclenché le break, on s'assure de renvoyer le meilleur
+    if patience_counter < patience:
+        w = [w_i.copy() for w_i in best_w]
+        b = [b_i.copy() for b_i in best_b]
 
     return w, b, losses
 
-# ==============================================================================================
-# Calcul des prédictions
-# ==============================================================================================
+def predict_proba_relu(x, w, b):
+    a, _ = eval_forward_relu(x, w, b)
+    return a[-1][0]
 
-def predict_generic(x, w, b, seuil=0.35):
-    proba = eval_forward(x, w, b)[-1][0]
+def predict_relu(x, w, b, seuil=0.5):
+    proba = predict_proba_relu(x, w, b)
     return 1 if proba >= seuil else 0
 
-# ==========================================
-# Sauvegarder et charger les modèles
-# ==========================================  
 
-def save_model(model_or_filename, w=None, b=None):
-    """Save model weights and biases to a file.
+# ==============================================================================================
+# Etape 5 : Évaluation, Métriques, et Gestion du Modèle
+# ==============================================================================================
 
-    Supports both calling styles:
-      save_model(filename, w, b)
-      save_model(model_dict, filename)
-    """
-    if isinstance(model_or_filename, dict):
-        model_dict = model_or_filename
-        if w is None:
-            raise ValueError("save_model(model_dict, filename) requires a filename argument")
-        filename = w
-        w = model_dict.get("w")
-        b = model_dict.get("b")
-    else:
-        filename = model_or_filename
-
-    if w is None or b is None:
-        raise ValueError("save_model(filename, w, b) requires both w and b")
-
-    np.savez(filename, w=np.array(w, dtype=object), b=np.array(b, dtype=object))
-
-
-def load_model(filename):
-    params = np.load(filename, allow_pickle=True)
-    w = list(params["w"])
-    b = list(params["b"])
-    return w, b
-
-# ==========================================
-# Cross-validation
-# ==========================================
-
-def cross_validation(data, target, train_func, predict_func, n_folds=5,
-                     n_epochs=20, learning_rate=0.001, random_state=42, batch_size=32, patience=10,
-                     hidden_layer_sizes=[64, 32], verbose=True, **train_kwargs):
+def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01, random_state=42, seuil=0.5, dropout_rate=0.0):
     indices = np.arange(len(data))
-    np.random.seed(random_state) #pour la reproductibilité
+    np.random.seed(random_state) 
     np.random.shuffle(indices)
-
     folds = np.array_split(indices, n_folds)
-
+    
     accuracies = []
+    mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0}
+
+    n_pixels = data.shape[1] - 8
 
     for k in range(n_folds):
-
-        if verbose:
-            print(f"\n===== Fold {k+1} =====")
-
-        # fold de test
+        print(f"--- Fold {k+1}/{n_folds} ---")
         test_idx = folds[k]
+        train_idx = np.concatenate([folds[i] for i in range(n_folds) if i != k])
 
-        # folds d'entraînement
-        train_idx = np.concatenate(
-            [folds[i] for i in range(n_folds) if i != k]
-        )
+        X_train, y_train = data[train_idx], target[train_idx]
+        X_test, y_test = data[test_idx], target[test_idx]
 
-
-        # séparation des données
-        X_train = data[train_idx]
-        y_train = target[train_idx]
-
-        #caclul des stats sur l'entrainement pour éviter data leakage
+        # 1. Normalisation Globale Sécurisée
         mean_train = np.mean(X_train, axis=0)
         std_train = np.std(X_train, axis=0)
-        std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+        std_train = np.where(std_train < 1e-8, 1e-8, std_train) # Amélioration Sécurité 1
+        
+        X_train_scaled = (X_train - mean_train) / std_train
+        X_test_scaled = (X_test - mean_train) / std_train
+        
+        # 2. Clipping pour écrêter les valeurs extrêmes (Amélioration Sécurité 2)
+        X_train_scaled = np.clip(X_train_scaled, -5, 5)
+        X_test_scaled = np.clip(X_test_scaled, -5, 5)
 
-        X_train = (X_train - mean_train) / (std_train + 1e-8)
-        X_test = (data[test_idx] - mean_train) / (std_train + 1e-8)
+        # 3. Séparation Pixels / Features expertes
+        X_train_pixels, X_train_expert = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
+        X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
 
-        X_train = np.clip(X_train, -5, 5)
-        X_test = np.clip(X_test, -5, 5)
+        # 4. ACP (PCA) Ciblée UNIQUEMENT sur les pixels
+        pca = PCA(n_components=COMPOSANTES_PCA, random_state=random_state)
+        X_train_pixels_pca = pca.fit_transform(X_train_pixels)
+        X_test_pixels_pca = pca.transform(X_test_pixels)
 
-        y_test = target[test_idx]
+        # 5. Recombinaison finale
+        X_train_final = np.concatenate([X_train_pixels_pca, X_train_expert], axis=1)
+        X_test_final = np.concatenate([X_test_pixels_pca, X_test_expert], axis=1)
 
-        result = train_func(
-            X_train,
-            y_train,
-            n_epochs=n_epochs,
-            hidden_layer_sizes=hidden_layer_sizes,
-            learning_rate=learning_rate,
-            random_state=random_state,
-            **train_kwargs
-        )
+        # 6. Entraînement et Prédiction
+        w, b, losses = train_func(X_train_final, y_train, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16], 
+                                  learning_rate=learning_rate, batch_size=BATCH_SIZE, random_state=random_state, 
+                                  dropout_rate=dropout_rate, patience=PATIENCE, lambda_reg=LAMBDA_L2)
 
-        w,b,losses = result
-        correct = sum(predict_func(X_test[i], w, b) == y_test[i] for i in range(len(X_test)))
-        accuracy = correct / len(X_test)
+        y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
+        
+        mc_fold = eval.matrice_confusion(y_test, y_pred)
+        mc_globale['VP'] += mc_fold['VP']
+        mc_globale['VN'] += mc_fold['VN']
+        mc_globale['FP'] += mc_fold['FP']
+        mc_globale['FN'] += mc_fold['FN']
+        
+        accuracy = eval.exactitude(mc_fold)
         accuracies.append(accuracy)
-        if verbose:
-            print(f"Accuracy: {accuracy:.4f}")
+        print(f"Accuracy du fold : {accuracy:.4f} | Loss finale : {losses[-1]:.4f}")
 
-    if verbose:
-        print(f"\nAccuracy moyenne: {np.mean(accuracies):.4f}")
-    return {'accuracies': accuracies, 'mean': np.mean(accuracies), 'w': w, 'b': b, 'losses': losses}
-
+    print(f"\nAccuracy moyenne Cross-Validation : {np.mean(accuracies):.4f}")
+    return mc_globale
 
 def random_search_hyperparameters(
     data,
@@ -503,3 +413,15 @@ learning_rate = {learning_rate:.5f}
 
     return best_result, results
 
+def save_model(filename, w, b, mean_train, std_train, pca_comp, pca_mean):
+    np.savez(filename, 
+             w=np.array(w, dtype=object), 
+             b=np.array(b, dtype=object), 
+             mean=mean_train, 
+             std=std_train,
+             pca_comp=pca_comp,
+             pca_mean=pca_mean)
+
+def load_model(filename):
+    params = np.load(filename, allow_pickle=True)
+    return list(params["w"]), list(params["b"]), params["mean"], params["std"], params["pca_comp"], params["pca_mean"]
