@@ -57,7 +57,7 @@ Instructions d'installation :
 ===
 (qu'est-ce que ça nécessite ? Peut-il tourner sur Linux VM)
 
-Pour faire fonctionner le projet, 
+Pour faire fonctionner le projet, une version 3.12 (ou 3.13) de Python est conseillée
 
 Notre workflow utilise plusieurs bibliothèques de fonctions Python. Il convient donc de vérifier que les bibliothèques ci-dessous sont bien installées sur la machine où il sera exécuté, et de les installer sinon à l'aide de la commande "pip install [nom du module]". Pour assurer la compatibilité entre ces modules, nous précisons également la version recommendée de chaque module à avoir sur l'environnement Python.
     numpy (version 1.26.4); skimage (version 0.24.0) ; matplotlib (version 3.9.0) ; scipy (version 1.13.1) ; os ; itertools ; sklearn ; random
