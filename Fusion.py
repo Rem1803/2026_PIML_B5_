@@ -17,9 +17,12 @@ TAILLE_IMAGE = (32, 32)
 MAX_IMAGES = 1000           
 TAUX_APPRENTISSAGE = 0.01  
 BATCH_SIZE = 32
-EPOCHS = 40
+EPOCHS = 150               # Augmenté car l'Early Stopping arrêtera le modèle au bon moment
+PATIENCE = 15              # Nombre d'époques sans amélioration avant arrêt
 SEUIL_DECISION = 0.35
 TAUX_DROPOUT = 0.2   
+LAMBDA_L2 = 0.0001         # Régularisation L2
+COMPOSANTES_PCA = 50       
 
 # Chemins des dossiers (à adapter si besoin)
 UNINFECTED_PATH = r"C:\Users\noevm\Documents\INSA_Lyon\3A_2025-2026\S2\UE3_PIML\Projet\cell_images\Uninfected"
@@ -97,47 +100,6 @@ def plot_color_histograms(uninfected_dir, parasitized_dir, sample_size=100):
     plt.show()
     plt.close()
 
-def plot_class_balance(uninfected_dir, parasitized_dir):
-    n_uninfected = len([f for f in os.listdir(uninfected_dir) if f.endswith('.png')])
-    n_parasitized = len([f for f in os.listdir(parasitized_dir) if f.endswith('.png')])
-    
-    classes = ['Saines', 'Infectées']
-    counts = [n_uninfected, n_parasitized]
-    
-    plt.figure(figsize=(6, 5))
-    bars = plt.bar(classes, counts, color=['#2ca02c', '#d62728'], alpha=0.8)
-    plt.title("Équilibre des classes dans le Dataset", fontsize=14)
-    for bar in bars:
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2, yval + (max(counts)*0.02), 
-                 int(yval), ha='center', va='bottom', fontweight='bold')
-    plt.ylim(0, max(counts) * 1.15) 
-    plt.show()
-    plt.close()
-
-def plot_advanced_eda(data, target):
-    mean_data = np.mean(data, axis=0)
-    std_data = np.std(data, axis=0)
-    std_data[std_data == 0] = 1 # Sécurité pour éviter la division par zéro
-    
-    data_scaled = (data - mean_data) / std_data
-    
-    pca = PCA(n_components=2)
-    data_pca = pca.fit_transform(data_scaled)
-    
-    pca_saines = data_pca[target == 0]
-    pca_infectees = data_pca[target == 1]
-    
-    plt.figure(figsize=(8, 6))
-    plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none', color='green')
-    plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none', color='red')
-    plt.title("Projection PCA (Espace à 2 Dimensions)")
-    plt.xlabel(f"Composante Principale 1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
-    plt.ylabel(f"Composante Principale 2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    plt.close()
 
 # ==============================================================================================
 # Etape 3 : Pipeline de Données et Extraction de Caractéristiques Avancées
@@ -159,25 +121,20 @@ def extract_advanced_features(arr_rgb, arr_hsv):
     kurtosis = stats.kurtosis(blue_channel.flatten())
     
     # --- Analyse de la Texture (Filtre de Sobel) ---
-    # 1. Conversion en niveaux de gris
     gray = np.mean(arr_rgb, axis=2)
-    
-    # 2. On ajoute une bordure virtuelle (padding) pour pouvoir calculer les bords
     p = np.pad(gray, 1, mode='edge')
     
-    # 3. Convolution avec les noyaux de Sobel pour détecter les bords verticaux et horizontaux
-    # Détection des lignes verticales (Noyau Sobel X)
     gx = (p[:-2, 2:] - p[:-2, :-2]) + 2 * (p[1:-1, 2:] - p[1:-1, :-2]) + (p[2:, 2:] - p[2:, :-2])
-    
-    # Détection des lignes horizontales (Noyau Sobel Y)
     gy = (p[:-2, :-2] - p[2:, :-2]) + 2 * (p[:-2, 1:-1] - p[2:, 1:-1]) + (p[:-2, 2:] - p[2:, 2:])
     
     gradient_mag = np.sqrt(gx**2 + gy**2)
-    
     mean_gradient = np.mean(gradient_mag)
     std_gradient = np.std(gradient_mag)
     
-    return np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient])
+    advanced_feats = np.array([variance, purple_proportion, mean_saturation, entropy, skewness, kurtosis, mean_gradient, std_gradient], dtype=np.float32)
+    
+    # Sécurité absolue : on remplace les NaNs et les Infinis par 0
+    return np.nan_to_num(advanced_feats, nan=0.0, posinf=0.0, neginf=0.0)
 
 def transformer_image_en_features(chemin_image, image_size):
     """Ouvre une image et la transforme en un vecteur prêt pour le réseau de neurones."""
@@ -222,7 +179,6 @@ def load_images_hsv(uninfected_dir, parasitized_dir, image_size=(32, 32), max_pe
 # ==============================================================================================
 
 def sigmoid(z):
-    # np.clip évite l'overflow dans l'exponentielle
     z = np.clip(z, -500, 500)
     return 1 / (1 + np.exp(-z))
 
@@ -237,16 +193,16 @@ def init_parameters(n_feats, hidden_layer_sizes, rng=None):
     b = [np.zeros(0)]
 
     w.append(rng.normal(0, np.sqrt(2 / n_feats), (hidden_layer_sizes[0], n_feats)))
-    b.append(np.zeros((hidden_layer_sizes[0])))
+    b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[0]))  # Bruit léger pour init (Amélioration 2)
     
     for l in range(2, L):
         fan_in = hidden_layer_sizes[l-2]
         w.append(rng.normal(0, np.sqrt(2 / fan_in), (hidden_layer_sizes[l-1], fan_in)))
-        b.append(np.zeros((hidden_layer_sizes[l-1])))
+        b.append(rng.normal(0, 0.01, size=hidden_layer_sizes[l-1]))
 
     fan_in = hidden_layer_sizes[L-2]
     w.append(rng.normal(0, np.sqrt(2 / fan_in), (1, fan_in)))
-    b.append(np.zeros((1)))
+    b.append(np.normal(0, 0.01, size=1) if hasattr(np, 'normal') else rng.normal(0, 0.01, size=1))
 
     return w, b
 
@@ -275,7 +231,6 @@ def eval_forward_relu(x, w, b, dropout_rate=0.0, training=False):
     return a, masks
 
 def mlp_error_entropy(data, target, w, b):
-    '''Binary Cross Entropy Globale'''
     E = 0
     epsilon = 1e-15
     for x in range(len(data)):
@@ -286,14 +241,21 @@ def mlp_error_entropy(data, target, w, b):
         E += e
     return E / len(data)
 
-def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 8],
-                             learning_rate=0.01, batch_size=32, random_state=42, dropout_rate=0.2):
+def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[32, 16],
+                             learning_rate=0.01, batch_size=32, random_state=42, 
+                             dropout_rate=0.2, patience=15, lambda_reg=0.0001):
     rng = np.random.default_rng(random_state)
     n_objs, n_feats = data.shape
     L = len(hidden_layer_sizes) + 1
 
     w, b = init_parameters(n_feats, hidden_layer_sizes, rng)
     losses = []
+    
+    # --- MÉCANIQUE D'EARLY STOPPING ---
+    best_loss = np.inf
+    patience_counter = 0
+    best_w = None
+    best_b = None
 
     for epoch in range(n_epochs):
         indices = rng.permutation(n_objs)
@@ -305,18 +267,13 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 
             grad_b = [np.zeros_like(b_l) for b_l in b]
 
             for i in batch_indices:
-                # --- MODIF ICI : On récupère a ET masks ---
                 a, masks = eval_forward_relu(data[i], w, b, dropout_rate=dropout_rate, training=True)
                 err = [None] * (L + 1)
                 
                 err[-1] = a[-1] - target[i]
                 
-                # Backpropagation rigoureuse
                 for l in range(L-1, 0, -1):
-                    # 1. Dérivée de base de ReLU
                     da = (a[l] > 0).astype(float)
-                    
-                    # 2. Application propre du masque du Dropout
                     if masks[l] is not None:
                         da = (da * masks[l]) / (1.0 - dropout_rate)
                     
@@ -328,16 +285,38 @@ def mlp_fit_minibatch_ultime(data, target, n_epochs=20, hidden_layer_sizes=[16, 
                     grad_b[l] += err[l]
 
             for l in range(1, L + 1):
-                w[l] -= learning_rate * (grad_w[l] / current_batch_size)
+                # Mise à jour avec Régularisation L2 (Amélioration 2)
+                w[l] -= learning_rate * (grad_w[l] / current_batch_size + lambda_reg * w[l])
                 b[l] -= learning_rate * (grad_b[l] / current_batch_size)
 
+        # Calcul de l'erreur en fin d'époque (sans dropout)
         loss = mlp_error_entropy(data, target, w, b)
         losses.append(loss)
+        
+        # --- VÉRIFICATION EARLY STOPPING ---
+        if loss < best_loss:
+            best_loss = loss
+            patience_counter = 0
+            best_w = [w_i.copy() for w_i in w]
+            best_b = [b_i.copy() for b_i in b]
+        else:
+            patience_counter += 1
+            
+        if patience_counter >= patience:
+            print(f"    -> Early Stopping à l'époque {epoch+1} (Loss opt: {best_loss:.4f})")
+            w = [w_i.copy() for w_i in best_w]
+            b = [b_i.copy() for b_i in best_b]
+            break
+
+    # Si on n'a jamais déclenché le break, on s'assure de renvoyer le meilleur
+    if patience_counter < patience:
+        w = [w_i.copy() for w_i in best_w]
+        b = [b_i.copy() for b_i in best_b]
 
     return w, b, losses
 
 def predict_proba_relu(x, w, b):
-    a, _ = eval_forward_relu(x, w, b) # <-- MODIF ICI (a, _)
+    a, _ = eval_forward_relu(x, w, b)
     return a[-1][0]
 
 def predict_relu(x, w, b, seuil=0.5):
@@ -346,7 +325,7 @@ def predict_relu(x, w, b, seuil=0.5):
 
 
 # ==============================================================================================
-# Etape 5 : Évaluation et Métriques
+# Etape 5 : Évaluation, Métriques, et Gestion du Modèle
 # ==============================================================================================
 
 def cross_validation(data, target, train_func, predict_func, n_folds=5, learning_rate=0.01, random_state=42, seuil=0.5, dropout_rate=0.0):
@@ -356,8 +335,9 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
     folds = np.array_split(indices, n_folds)
     
     accuracies = []
-    # On initialise une matrice de confusion globale pour les données de test
     mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0}
+
+    n_pixels = data.shape[1] - 8
 
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
@@ -367,20 +347,38 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         X_train, y_train = data[train_idx], target[train_idx]
         X_test, y_test = data[test_idx], target[test_idx]
 
+        # 1. Normalisation Globale Sécurisée
         mean_train = np.mean(X_train, axis=0)
         std_train = np.std(X_train, axis=0)
-        std_train[std_train == 0] = 1 
+        std_train = np.where(std_train < 1e-8, 1e-8, std_train) # Amélioration Sécurité 1
         
-        X_train = (X_train - mean_train) / std_train
-        X_test = (X_test - mean_train) / std_train
-
-        w, b, losses = train_func(X_train, y_train, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16], 
-                                  learning_rate=learning_rate, batch_size=BATCH_SIZE, random_state=random_state, dropout_rate=dropout_rate)
-
-        # Prédictions UNIQUEMENT sur le test set de ce fold
-        y_pred = [predict_func(x, w, b, seuil) for x in X_test]
+        X_train_scaled = (X_train - mean_train) / std_train
+        X_test_scaled = (X_test - mean_train) / std_train
         
-        # On calcule la matrice de ce fold et on l'ajoute à la globale
+        # 2. Clipping pour écrêter les valeurs extrêmes (Amélioration Sécurité 2)
+        X_train_scaled = np.clip(X_train_scaled, -5, 5)
+        X_test_scaled = np.clip(X_test_scaled, -5, 5)
+
+        # 3. Séparation Pixels / Features expertes
+        X_train_pixels, X_train_expert = X_train_scaled[:, :n_pixels], X_train_scaled[:, n_pixels:]
+        X_test_pixels, X_test_expert = X_test_scaled[:, :n_pixels], X_test_scaled[:, n_pixels:]
+
+        # 4. ACP (PCA) Ciblée UNIQUEMENT sur les pixels
+        pca = PCA(n_components=COMPOSANTES_PCA)
+        X_train_pixels_pca = pca.fit_transform(X_train_pixels)
+        X_test_pixels_pca = pca.transform(X_test_pixels)
+
+        # 5. Recombinaison finale
+        X_train_final = np.concatenate([X_train_pixels_pca, X_train_expert], axis=1)
+        X_test_final = np.concatenate([X_test_pixels_pca, X_test_expert], axis=1)
+
+        # 6. Entraînement et Prédiction
+        w, b, losses = train_func(X_train_final, y_train, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16], 
+                                  learning_rate=learning_rate, batch_size=BATCH_SIZE, random_state=random_state, 
+                                  dropout_rate=dropout_rate, patience=PATIENCE, lambda_reg=LAMBDA_L2)
+
+        y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
+        
         mc_fold = matrice_confusion(y_test, y_pred)
         mc_globale['VP'] += mc_fold['VP']
         mc_globale['VN'] += mc_fold['VN']
@@ -392,8 +390,6 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
         print(f"Accuracy du fold : {accuracy:.4f} | Loss finale : {losses[-1]:.4f}")
 
     print(f"\nAccuracy moyenne Cross-Validation : {np.mean(accuracies):.4f}")
-    
-    # On retourne la vraie matrice de confusion évaluée de manière impartiale
     return mc_globale
 
 def matrice_confusion(y_vrai, y_predit):
@@ -416,43 +412,50 @@ def rappel(mc):
 def score_f1(prec, rap):
     return 2 * (prec * rap) / (prec + rap) if (prec + rap) > 0 else 0.0
 
-def save_model(filename, w, b, mean_train, std_train):
-    """Sauvegarde les paramètres et les stats de normalisation."""
+def save_model(filename, w, b, mean_train, std_train, pca_comp, pca_mean):
     np.savez(filename, 
              w=np.array(w, dtype=object), 
              b=np.array(b, dtype=object), 
              mean=mean_train, 
-             std=std_train)
+             std=std_train,
+             pca_comp=pca_comp,
+             pca_mean=pca_mean)
 
 def load_model(filename):
-    """Charge les paramètres et les stats de normalisation."""
     params = np.load(filename, allow_pickle=True)
-    return list(params["w"]), list(params["b"]), params["mean"], params["std"]
+    return list(params["w"]), list(params["b"]), params["mean"], params["std"], params["pca_comp"], params["pca_mean"]
 
-def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, image_size=(32, 32), seuil=0.35):
-    """Prend une image au hasard, la pré-traite, la classe et l'affiche."""
+def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
     if not os.path.exists(image_path):
         print(f"Erreur : Le fichier {image_path} n'existe pas.")
         return
 
     img_originale = Image.open(image_path).convert("RGB")
+    
     combined_features = transformer_image_en_features(image_path, image_size)
     combined_features_scaled = (combined_features - mean_train) / std_train
+    combined_features_scaled = np.clip(combined_features_scaled, -5, 5) # Clipping Inférence
 
-    proba = predict_proba_relu(combined_features_scaled, w, b)
+    n_pixels = image_size[0] * image_size[1]
+    pixels_scaled = combined_features_scaled[:n_pixels]
+    expert_scaled = combined_features_scaled[n_pixels:]
+    
+    pixels_pca = np.dot(pixels_scaled - pca_mean, pca_comp.T)
+    features_final = np.concatenate([pixels_pca, expert_scaled])
+
+    proba = predict_proba_relu(features_final, w, b)
     prediction = 1 if proba >= seuil else 0
     
     plt.figure(figsize=(6, 6))
     plt.imshow(img_originale)
     plt.axis('off')
     
-    # Formatage du diagnostic médical
     if prediction == 1:
         statut = "INFECTÉE (Malaria)"
-        couleur = "#d62728"  # Rouge
+        couleur = "#d62728"  
     else:
         statut = "SAINE (Non infectée)"
-        couleur = "#2ca02c"  # Vert
+        couleur = "#2ca02c"  
         
     plt.title(f"Diagnostic IA : {statut}\nProbabilité d'infection : {proba*100:.2f}%", 
               color=couleur, fontsize=14, fontweight='bold', pad=15)
@@ -460,16 +463,11 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, image_siz
     plt.show()
     plt.close()
 
-def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, image_size=(32, 32), seuil=0.35):
-    """
-    Parcourt un dossier d'images inconnues, les analyse, et les trie
-    dans deux sous-dossiers : 'Classifiees_Saines' et 'Classifiees_Infectees'.
-    """
+def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
     if not os.path.exists(dossier_entree):
         print(f"Erreur : Le dossier d'entrée {dossier_entree} n'existe pas.")
         return
 
-    # Création des dossiers de destination
     dossier_saines = os.path.join(dossier_entree, "Resultats_Saines")
     dossier_infectees = os.path.join(dossier_entree, "Resultats_Infectees")
     
@@ -487,21 +485,23 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, image_size
     
     saines_count = 0
     infectees_count = 0
+    n_pixels = image_size[0] * image_size[1]
 
     for idx, filename in enumerate(fichiers):
         path_in = os.path.join(dossier_entree, filename)
-        
         try:
-            # 1. Pipeline de pré-traitement (Silencieux)
             combined_features = transformer_image_en_features(path_in, image_size)
+            combined_features_scaled = (combined_features - mean_train) / std_train
+            combined_features_scaled = np.clip(combined_features_scaled, -5, 5)
             
-            # Normalisation avec les stats du modèle
-            features_scaled = (combined_features - mean_train) / std_train
+            pixels_scaled = combined_features_scaled[:n_pixels]
+            expert_scaled = combined_features_scaled[n_pixels:]
             
-            # 2. Prédiction
-            proba = predict_proba_relu(features_scaled, w, b)
+            pixels_pca = np.dot(pixels_scaled - pca_mean, pca_comp.T)
+            features_final = np.concatenate([pixels_pca, expert_scaled])
             
-            # 3. Copie dans le bon dossier
+            proba = predict_proba_relu(features_final, w, b)
+            
             if proba >= seuil:
                 path_out = os.path.join(dossier_infectees, filename)
                 infectees_count += 1
@@ -511,7 +511,6 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, image_size
                 
             shutil.copy2(path_in, path_out)
             
-            # Affichage de la progression
             if (idx + 1) % 50 == 0 or (idx + 1) == total:
                 print(f"Progression : {idx + 1}/{total} images traitées...")
                 
@@ -531,29 +530,16 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, image_size
 if __name__ == "__main__":
     
     # ---------------------------------------------------------
-    # PHASE 1 : Exploration visuelle brute
-    # ---------------------------------------------------------
-    # print("1. Génération des graphiques EDA...")
-    # plot_image_grid(UNINFECTED_PATH, PARASITIZED_PATH)
-    # plot_color_histograms(UNINFECTED_PATH, PARASITIZED_PATH)
-    
-    # ---------------------------------------------------------
     # PHASE 2 : Préparation des données pour le Modèle
     # ---------------------------------------------------------
-    print(f"Chargement de {MAX_IMAGES} images par classe...")
+    print(f"Chargement de {MAX_IMAGES} images par classe (Taille dynamique : {TAILLE_IMAGE})...")
     X, y = load_images_hsv(UNINFECTED_PATH, PARASITIZED_PATH, image_size=TAILLE_IMAGE, max_per_class=MAX_IMAGES)
-    print(f"Données prêtes : {X.shape[0]} images, {X.shape[1]} variables par image.")
-    
-    # ---------------------------------------------------------
-    # PHASE 3 : Validation de la séparation (PCA)
-    # ---------------------------------------------------------
-    # print("\nGénération de l'analyse PCA sur les features extraites...")
-    # plot_advanced_eda(X, y)
+    print(f"Données brutes prêtes : {X.shape[0]} images, {X.shape[1]} variables par image.")
     
     # ---------------------------------------------------------
     # PHASE 4 : Entraînement et Évaluation du MLP
     # ---------------------------------------------------------
-    print("\nLancement de l'entraînement (Validation Croisée)...")
+    print("\nLancement de l'entraînement (Validation Croisée + ACP Ciblée + Early Stopping)...")
     
     vraie_matrice = cross_validation(
         X, y, 
@@ -574,24 +560,34 @@ if __name__ == "__main__":
     print(f"Score F1              : {score_f1(precision(vraie_matrice), rappel(vraie_matrice)):.4f}")
     
     # ---------------------------------------------------------
-    # ENTRAÎNEMENT DU MODÈLE FINAL (Sur 100% des données)
+    # ENTRAÎNEMENT DU MODÈLE FINAL
     # ---------------------------------------------------------
     print("\nEntraînement du modèle de production final...")
     
-    # On calcule les stats globales sur TOUT le dataset pour la future démo
     mean_final = np.mean(X, axis=0)
     std_final = np.std(X, axis=0)
-    std_final[std_final == 0] = 1
+    std_final = np.where(std_final < 1e-8, 1e-8, std_final)
     X_scaled = (X - mean_final) / std_final
+    X_scaled = np.clip(X_scaled, -5, 5)
+    
+    n_pixels = TAILLE_IMAGE[0] * TAILLE_IMAGE[1]
+    X_pixels_scaled = X_scaled[:, :n_pixels]
+    X_expert_scaled = X_scaled[:, n_pixels:]
+    
+    pca_finale = PCA(n_components=COMPOSANTES_PCA)
+    X_pixels_pca = pca_finale.fit_transform(X_pixels_scaled)
+    
+    X_final = np.concatenate([X_pixels_pca, X_expert_scaled], axis=1)
     
     w_final, b_final, _ = mlp_fit_minibatch_ultime(
-        X_scaled, y, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16],
-        learning_rate=TAUX_APPRENTISSAGE, batch_size=BATCH_SIZE, random_state=42
+        X_final, y, n_epochs=EPOCHS, hidden_layer_sizes=[32, 16],
+        learning_rate=TAUX_APPRENTISSAGE, batch_size=BATCH_SIZE, random_state=42, 
+        dropout_rate=TAUX_DROPOUT, patience=PATIENCE, lambda_reg=LAMBDA_L2
     )
     
-    # Sauvegarde du package complet
-    save_model("modele_malaria_ultime.npz", w_final, b_final, mean_final, std_final)
-    print("Modèle de production sauvegardé avec succès sous 'modele_malaria_ultime.npz'.")
+    save_model("modele_malaria_ultime.npz", w_final, b_final, mean_final, std_final, 
+               pca_finale.components_, pca_finale.mean_)
+    print(f"Modèle sauvegardé ('modele_malaria_ultime.npz'). Le réseau utilise désormais {X_final.shape[1]} variables au lieu de {X.shape[1]}.")
     
     # ---------------------------------------------------------
     # INTERFACE UTILISATEUR (Mode Démo INTERACTIF)
@@ -601,8 +597,7 @@ if __name__ == "__main__":
     print("MODE DÉMONSTRATION INTERACTIF")
     print("="*50)
     
-    # Simulation du chargement futur 
-    w_load, b_load, mean_load, std_load = load_model("modele_malaria_ultime.npz")
+    w_load, b_load, mean_load, std_load, pca_comp, pca_mean = load_model("modele_malaria_ultime.npz")
     
     while True:
         print("\nQue souhaitez-vous faire ?")
@@ -618,12 +613,12 @@ if __name__ == "__main__":
             
         elif choix == '1':
             chemin = input("Entrez le chemin de l'image (.png) : ").strip('"').strip("'")
-            diagnostiquer_une_cellule(chemin, w_load, b_load, mean_load, std_load, 
+            diagnostiquer_une_cellule(chemin, w_load, b_load, mean_load, std_load, pca_comp, pca_mean,
                                       image_size=TAILLE_IMAGE, seuil=SEUIL_DECISION)
                                       
         elif choix == '2':
             dossier = input("Entrez le chemin du DOSSIER contenant les nouvelles images : ").strip('"').strip("'")
-            trier_dossier_images(dossier, w_load, b_load, mean_load, std_load, 
+            trier_dossier_images(dossier, w_load, b_load, mean_load, std_load, pca_comp, pca_mean,
                                  image_size=TAILLE_IMAGE, seuil=SEUIL_DECISION)
                                  
         else:
