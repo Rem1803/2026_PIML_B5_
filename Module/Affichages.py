@@ -8,6 +8,15 @@ import Module.Evaluation as eval
 from sklearn.decomposition import PCA
 
 def plot_image_grid(uninfected_dir, parasitized_dir, n_images_per_class=8):
+    """
+    Affiche une grille comparative d'images saines et infectées.
+
+    Args:
+        uninfected_dir (str): Chemin vers le dossier des cellules saines.
+        parasitized_dir (str): Chemin vers le dossier des cellules infectées.
+        n_images_per_class (int): Nombre d'images à afficher par catégorie. 
+                                  La grille est fixée à 4x4 (8 par classe).
+    """
     uninfected_files = [f for f in os.listdir(uninfected_dir) if f.endswith('.png')]
     parasitized_files = [f for f in os.listdir(parasitized_dir) if f.endswith('.png')]
     
@@ -38,6 +47,16 @@ def plot_image_grid(uninfected_dir, parasitized_dir, n_images_per_class=8):
     plt.show()
 
 def plot_advanced_eda(data, target):
+    """
+    Réalise une Analyse Exploratoire Avancée (EDA) via une réduction de dimension PCA.
+    
+    Cette fonction normalise les données, projette les features dans un espace 
+    à 2 dimensions et visualise la séparation entre les classes.
+
+    Args:
+        data (np.ndarray): Matrice des caractéristiques (n_samples, n_features).
+        target (np.ndarray): Vecteur des étiquettes (0 pour sain, 1 pour infecté).
+    """
     # 1. Normalisation (Z-score) pour la visualisation
     mean = np.mean(data, axis=0)
     std = np.std(data, axis=0)
@@ -64,11 +83,11 @@ def plot_advanced_eda(data, target):
 
 def plot_losses(losses, title="Evolution de la loss"):
     """
-    Affiche le graphique de l'évolution de la loss.
-    
-    Parameters:
-    losses (list): Liste des losses pour chaque époque.
-    title (str): Titre du graphique.
+    Visualise la courbe de convergence de la fonction de coût (Loss).
+
+    Args:
+        losses (list): Liste des valeurs de loss calculées à chaque époque.
+        title (str, optional): Titre du graphique. Défaut à "Evolution de la loss".
     """
     plt.figure(figsize=(10, 5))
     plt.plot(losses)
