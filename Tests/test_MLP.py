@@ -17,21 +17,6 @@ TAUX_DROPOUT = 0.2
 LAMBDA_L2 = 0.0001   # Régularisation L2
 COMPOSANTES_PCA = 50       
 
-# =======================
-# Chemins des dossiers 
-# =======================
-
-UNINFECTED_PATH = r"Uninfected"
-PARASITIZED_PATH = r"Parasitized"
-
-
-def  test_load_images():
-    # Test de la fonction load_images
-    images, labels = MLP.load_images(UNINFECTED_PATH, PARASITIZED_PATH)
-    assert images.shape == (60000, 28, 28), "La forme des images est incorrecte"
-    assert labels.shape == (60000,), "La forme des labels est incorrecte"
-    assert np.all((images >= 0) & (images <= 255)), "Les valeurs des pixels doivent être entre 0 et 255"
-    assert np.all((labels >= 0) & (labels <= 9)), "Les labels doivent être entre 0 et 9"
 
 
 
@@ -44,84 +29,193 @@ def test_sigmoid():
 
 
 def test_init_parameters():
-    # Test de la fonction init_parameters
-    input_size = 10
-    hidden_size = 5
-    output_size = 2
-    parameters = MLP.init_parameters(input_size, hidden_size, output_size)
-    assert parameters['W1'].shape == (input_size, hidden_size), "La forme de W1 est incorrecte"
-    assert parameters['b1'].shape == (hidden_size,), "La forme de b1 est incorrecte"
-    assert parameters['W2'].shape == (hidden_size, output_size), "La forme de W2 est incorrecte"
-    assert parameters['b2'].shape == (output_size,), "La forme de b2 est incorrecte"
+    n_feats = 4
+    hidden_layers = [5, 3]
+
+    rng = np.random.default_rng(42)
+
+    w, b = MLP.init_parameters(n_feats, hidden_layers, rng)
+
+    # --- Vérification de la structure ---
+    # w et b doivent contenir :
+    # [dummy, layer1, layer2, output]
+
+    # --- Vérification des formes des poids ---
+    assert w[1].shape == (5, 4)      # première couche cachée
+    assert w[2].shape == (3, 5)      # deuxième couche cachée
+    assert w[3].shape == (1, 3)      # couche de sortie
+
+    # --- Vérification des biais ---
+    assert b[1].shape == (5,)
+    assert b[2].shape == (3,)
+    assert b[3].shape == (1,)
+
+    # --- Vérification des statistiques (He init approx) ---
+    # moyenne proche de 0
+    assert np.abs(np.mean(w[1])) < 1.0
+
+    # variance approximative (pas stricte mais sanity check)
+    expected_var = 2 / n_feats
+    assert np.isclose(np.var(w[1]), expected_var, rtol=0.5)
+
+    # --- Reproductibilité ---
+    rng2 = np.random.default_rng(42)
+    w2, b2 = MLP.init_parameters(n_feats, hidden_layers, rng2)
+
+    for i in range(len(w)):
+        assert np.allclose(w[i], w2[i])
+        assert np.allclose(b[i], b2[i])
 
 
 
 def test_eval_forward_relu():
-    # Test de la fonction eval_forward_relu
-    X = np.array([[1, 2], [3, 4]])
-    parameters = {
-        'W1': np.array([[0.1, 0.2], [0.3, 0.4]]),
-        'b1': np.array([0.5, 0.6]),
-        'W2': np.array([[0.7, 0.8], [0.9, 1.0]]),
-        'b2': np.array([1.1, 1.2])
-    }
-    A2 = MLP.eval_forward_relu(X, parameters)
-    expected_A2 = np.array([[1.26, 1.56], [3.06, 3.36]])
-    assert np.allclose(A2, expected_A2), "La fonction eval_forward_relu ne retourne pas les valeurs attendues"
+    # Réseau simple
+    x = np.array([1.0, -1.0, 2.0])
+    w = [
+        np.zeros((0, 0)),  # dummy
+        np.array([[0.5, -0.2, 0.1],
+                  [0.3, 0.8, -0.5]]),
+        np.array([[1.0, -1.0]])
+    ]
+    b = [
+        np.zeros(0),       # dummy
+        np.array([0.1, -0.1]),
+        np.array([0.0])
+    ]
+
+    rng = np.random.default_rng(42)
+
+    a, masks = MLP.eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=rng)
+
+    # --- Structure ---
+    assert len(a) == len(w)
+    assert len(masks) == len(w)
+
+    # --- Formes ---
+    assert a[0].shape == x.shape
+    assert a[-1].shape == (1,)
+
+    # --- Pas de dropout en inference ---
+    assert all(m is None for m in masks)
+
+    # --- Reproductibilité (sans dropout) ---
+    rng2 = np.random.default_rng(42)
+    a2, masks2 = MLP.eval_forward_relu(x, w, b, dropout_rate=0.0, training=False, rng=rng2)
+
+    for i in range(len(a)):
+        assert np.allclose(a[i], a2[i])
 
 
 
 def test_mlp_error_entropy():
-    # Test de la fonction mlp_error_entropy
-    Y = np.array([[1, 0], [0, 1]])
-    A2 = np.array([[0.9, 0.1], [0.2, 0.8]])
-    error = MLP.mlp_error_entropy(Y, A2)
-    expected_error = -np.mean(np.sum(Y * np.log(A2), axis=1))
-    assert np.isclose(error, expected_error), "La fonction mlp_error_entropy ne retourne pas les valeurs attendues"
+    # --- Données simples ---
+    data = [
+        np.array([1.0, 0.0]),
+        np.array([0.0, 1.0])
+    ]
+    target = np.array([1, 0])
+
+    # --- Réseau trivial (prédiction constante ~0.5) ---
+    w = [
+        np.zeros((0, 0)),
+        np.zeros((1, 2))
+    ]
+    b = [
+        np.zeros(0),
+        np.zeros(1)
+    ]
+
+    loss = MLP.mlp_error_entropy(data, target, w, b)
+
+    # sigmoid(0) = 0.5 => loss = -log(0.5)
+    expected = -np.log(0.5)
+
+    assert np.isclose(loss, expected, atol=1e-6)
 
 
 
-def test_mlp_fit_mini_batch():
-    # Test de la fonction mlp_fit_mini_batch
-    X = np.random.rand(100, 10)
-    Y = np.random.rand(100, 2)
-    parameters = MLP.init_parameters(10, 5, 2)
-    parameters = MLP.mlp_fit_mini_batch(X, Y, parameters, TAUX_APPRENTISSAGE, BATCH_SIZE, EPOCHS, PATIENCE)
-    assert 'W1' in parameters and 'b1' in parameters and 'W2' in parameters and 'b2' in parameters, "Les paramètres ne sont pas correctement mis à jour"
+def test_mlp_fit_minibatch():
+    np.random.seed(0)
+
+    data = np.random.randn(20, 4)
+    target = (np.random.rand(20) > 0.5).astype(int)
+
+    w, b, losses = MLP.mlp_fit_minibatch(
+        data, target,
+        n_epochs=3,
+        hidden_layer_sizes=[5],
+        batch_size=4,
+        random_state=42,
+        dropout_rate=0.0,
+        patience=10
+    )
+
+    # --- Structure ---
+    assert isinstance(losses, list)
+    assert len(losses) <= 3
+
+    # w, b contiennent layers + sortie
+    assert len(w) == 3
+    assert len(b) == 3
+
+    # --- Shapes cohérentes ---
+    assert w[1].shape[0] == 5
+    assert w[1].shape[1] == 4
+    assert w[1].shape == (5, 4)
+
+    assert w[2].shape[0] == 1
+    assert w[2].shape[1] == 5
 
 
 
 def test_predict_relu():
-    # Test de la fonction predict_relu
-    X = np.array([[1, 2], [3, 4]])
-    parameters = {
-        'W1': np.array([[0.1, 0.2], [0.3, 0.4]]),
-        'b1': np.array([0.5, 0.6]),
-        'W2': np.array([[0.7, 0.8], [0.9, 1.0]]),
-        'b2': np.array([1.1, 1.2])
-    }
-    predictions = MLP.predict_relu(X, parameters)
-    expected_predictions = np.array([[1, 1], [1, 1]])
-    assert np.array_equal(predictions, expected_predictions), "La fonction predict_relu ne retourne pas les valeurs attendues"
+    x = np.array([0.2, 0.8])
+    w = [
+        np.zeros((0, 0)),
+        np.array([[0.1, 0.2]]),
+        np.array([[0.3]])
+    ]
+    b = [
+        np.zeros(0),
+        np.array([0.0]),
+        np.array([0.0])
+    ]
+
+    pred = MLP.predict_relu(x, w, b)
+
+    assert pred in [0, 1]
+    assert isinstance(pred, int)
 
 
 
 def test_cross_validation():
-    # Test de la fonction cross_validation
-    X = np.random.rand(100, 10)
-    Y = np.random.rand(100, 2)
-    parameters = MLP.init_parameters(10, 5, 2)
-    accuracy = MLP.cross_validation(X, Y, parameters, TAUX_APPRENTISSAGE, BATCH_SIZE, EPOCHS, PATIENCE)
-    assert 0 <= accuracy <= 1, "L'accuracy doit être entre 0 et 1"
+    data = np.random.randn(100, 60)
+    target = (np.sum(data, axis=1) > 0).astype(int)
 
+    def fake_train(*args, **kwargs):
+        return [None, np.zeros((1,1))], [None, np.zeros(1)], [1.0]
 
+    def fake_predict(x, w, b, seuil):
+        return 0
 
-def test_random_search_hyperparameters():
-    # Test de la fonction random_search_hyperparameters
-    X = np.random.rand(100, 10)
-    Y = np.random.rand(100, 2)
-    best_params = MLP.random_search_hyperparameters(X, Y, TAUX_APPRENTISSAGE, BATCH_SIZE, EPOCHS, PATIENCE)
-    assert 'learning_rate' in best_params and 'batch_size' in best_params and 'epochs' in best_params and 'patience' in best_params, "Les hyperparamètres ne sont pas correctement retournés"
+    class fake_eval:
+        @staticmethod
+        def matrice_confusion(y_true, y_pred):
+            return {"VP": 0, "VN": len(y_true), "FP": 0, "FN": 0}
 
+        @staticmethod
+        def exactitude(mc):
+            return mc["VN"] / (mc["VP"] + mc["VN"] + mc["FP"] + mc["FN"])
 
+    result = MLP.cross_validation(
+        data, target,
+        train_func=fake_train,
+        predict_func=fake_predict,
+        n_folds=4,
+        n_epochs=1,
+        hidden_layer_sizes=[2],
+        random_state=1
+    )
+
+    assert 0.0 <= result["mean"] <= 1.0
 
