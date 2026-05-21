@@ -287,6 +287,8 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
     n_pixels = 32 * 32
 
+    all_losses = [] #pour stocker les losses de chaque fold pour une analyse plus détaillée de la convergence
+
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
 
@@ -333,6 +335,7 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
             patience=PATIENCE,
             lambda_reg=LAMBDA_L2
         )
+        all_losses.append(losses) #stockage des losses de ce fold pour analyse ultérieure
 
         y_pred = [predict_func(x, w, b, seuil) for x in X_test_final]
 
@@ -352,8 +355,72 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
 
     return {
         "mean": np.mean(accuracies),
-        "confusion_matrix": mc_globale
+        "confusion_matrix": mc_globale,
+        "losses": all_losses
     }
+
+def mean_losses(losses_list):
+    """
+    Calcule la moyenne des losses de plusieurs folds
+    en gérant des longueurs différentes dues à l'early stopping.
+    """
+
+    max_len = max(len(losses) for losses in losses_list)
+
+    padded_losses = []
+
+    for losses in losses_list:
+        padded = losses + [losses[-1]] * (max_len - len(losses)) #on remplit les pertes manquantes avec la dernière perte connue pour éviter de fausser la moyenne
+        padded_losses.append(padded)
+
+    return np.mean(padded_losses, axis=0)
+
+def prepare_production_data(data, random_state=42):
+    """
+    Prépare les données pour l'entraînement final :
+    - normalisation
+    - clipping
+    - séparation pixels/features additionnelles
+    - PCA sur les pixels
+    - concaténation finale
+    """
+
+    mean_train = np.mean(data, axis=0)
+
+    std_train = np.std(data, axis=0)
+    std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+
+    data_scaled = np.clip(
+        (data - mean_train) / std_train,
+        -5,
+        5
+    )
+
+    n_pixels = TAILLE_IMAGE[0] * TAILLE_IMAGE[1]
+
+    data_pixels = data_scaled[:, :n_pixels]
+    data_additional = data_scaled[:, n_pixels:]
+
+    pca = PCA(
+        n_components=COMPOSANTES_PCA,
+        random_state=random_state
+    )
+
+    data_pixels_pca = pca.fit_transform(data_pixels)
+
+    data_final = np.concatenate(
+        [data_pixels_pca, data_additional],
+        axis=1
+    )
+
+    return (
+        data_final,
+        mean_train,
+        std_train,
+        pca.components_,
+        pca.mean_
+    )
+
 
 def random_search_hyperparameters(data, target, train_func, predict_func, hidden_layer_configs,
     batch_sizes, learning_rate_range=(0.001,0.05), n_trials=8, random_state=42):
@@ -439,6 +506,15 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
         # Mise à jour du meilleur résultat si la configuration actuelle est meilleure que le meilleur résultat précédent
         if best_result is None or mean_acc > best_result["mean_accuracy"]:
             best_result = result
+    
+    # Sécurité en cas d'échec de la recherche
+    if best_result is None:
+        best_result = {
+            "learning_rate": 0.01,
+            "hidden_layers": [32, 16],
+            "batch_size": 32,
+            "mean_accuracy": 0.0
+        }
 
     print("\n BEST CONFIG:")
     print(best_result if best_result else "Aucune config correcte trouvée")
@@ -469,7 +545,11 @@ def load_model(filename):
     return list(params["w"]), list(params["b"]), params["mean"], params["std"], params["pca_comp"], params["pca_mean"]
 
 def save_best_hyperparameters(filename, best_result):
+    """Sauvegarde la meilleure configuration d'hyperparamètres dans un fichier .npy.
+    """
     np.save(filename, best_result, allow_pickle=True)
 
 def load_best_hyperparameters(filename):
+    """Charge la meilleure configuration d'hyperparamètres à partir d'un fichier .npy.
+    """
     return np.load(filename, allow_pickle=True).item()

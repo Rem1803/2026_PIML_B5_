@@ -7,18 +7,33 @@ from PIL import Image
 import Module.Pre_traitement as pre_traitement
 import Module.MLP as mlp
 
-
 def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
+    """
+    Réalise un diagnostic complet sur une image unique et affiche le résultat.
+
+    Args:
+        image_path (str): Chemin vers le fichier image à diagnostiquer.
+        w (np.ndarray): Poids du réseau de neurones.
+        b (np.ndarray): Biais du réseau de neurones.
+        mean_train (np.ndarray): Moyenne des données d'entraînement (pour normalisation).
+        std_train (np.ndarray): Écart-type des données d'entraînement.
+        pca_comp (np.ndarray): Composantes principales de la PCA.
+        pca_mean (np.ndarray): Moyenne des données utilisée pour la PCA.
+        image_size (tuple): Dimensions de redimensionnement de l'image (hauteur, largeur).
+        seuil (float): Seuil de probabilité pour la classification (par défaut 0.35).
+    """
     if not os.path.exists(image_path):
         print(f"Erreur : Le fichier {image_path} n'existe pas.")
         return
 
     img_originale = Image.open(image_path).convert("RGB")
     
+    # Prétraitement et mise à l'échelle
     combined_features = pre_traitement.transformer_image_en_features(image_path, image_size)
     combined_features_scaled = (combined_features - mean_train) / std_train
-    combined_features_scaled = np.clip(combined_features_scaled, -5, 5) # Clipping Inférence
+    combined_features_scaled = np.clip(combined_features_scaled, -5, 5)
 
+    # Préparation des features pour le modèle
     n_pixels = image_size[0] * image_size[1]
     pixels_scaled = combined_features_scaled[:n_pixels]
     expert_scaled = combined_features_scaled[n_pixels:]
@@ -26,13 +41,16 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
     pixels_pca = np.dot(pixels_scaled - pca_mean, pca_comp.T)
     features_final = np.concatenate([pixels_pca, expert_scaled])
 
+    # Prédiction 
     proba = mlp.predict_proba_relu(features_final, w, b)
     prediction = 1 if proba >= seuil else 0
     
+    # Visualisation du diagnostic
     plt.figure(figsize=(6, 6))
     plt.imshow(img_originale)
     plt.axis('off')
-    
+
+    # Affichage du résultat avec une couleur indicative
     if prediction == 1:
         statut = "INFECTÉE (Malaria)"
         couleur = "#d62728"  
@@ -46,7 +64,18 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
     plt.show()
     plt.close()
 
-def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
+def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, pca_mean, 
+                         image_size=(32, 32), seuil=0.35, afficher_resultats=True):
+    """
+    Trie un dossier d'images en deux catégories (Saines/Infectées) et génère un rapport.
+
+    Args:
+        dossier_entree (str): Chemin du dossier contenant les images .png à trier.
+        w, b, mean_train, std_train, pca_comp, pca_mean: Paramètres du modèle et du prétraitement.
+        image_size (tuple): Dimensions cibles des images.
+        seuil (float): Seuil de décision pour la classification.
+        afficher_resultats (bool): Si True, affiche une grille d'aperçu des résultats après tri.
+    """
     if not os.path.exists(dossier_entree):
         print(f"Erreur : Le dossier d'entrée {dossier_entree} n'existe pas.")
         return
@@ -73,6 +102,7 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, 
     for idx, filename in enumerate(fichiers):
         path_in = os.path.join(dossier_entree, filename)
         try:
+            # Traitement
             combined_features = pre_traitement.transformer_image_en_features(path_in, image_size)
             combined_features_scaled = (combined_features - mean_train) / std_train
             combined_features_scaled = np.clip(combined_features_scaled, -5, 5)
@@ -83,8 +113,10 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, 
             pixels_pca = np.dot(pixels_scaled - pca_mean, pca_comp.T)
             features_final = np.concatenate([pixels_pca, expert_scaled])
             
+            # Inférence
             proba = mlp.predict_proba_relu(features_final, w, b)
             
+            # Tri
             if proba >= seuil:
                 path_out = os.path.join(dossier_infectees, filename)
                 infectees_count += 1
@@ -100,7 +132,26 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, 
         except Exception as e:
             print(f"Erreur lors du traitement de {filename} : {e}")
 
+    # Rapport final
     print("\n--- RAPPORT DE TRI ---")
     print(f"Total analysé : {total}")
     print(f"Détectées Saines    : {saines_count} -> copiées dans '{dossier_saines}'")
     print(f"Détectées Infectées : {infectees_count} -> copiées dans '{dossier_infectees}'")
+    
+    # Affichage optionnel des résultats
+    if afficher_resultats:
+        dossiers_a_afficher = [("Saines", dossier_saines), ("Infectées", dossier_infectees)]
+        
+        for nom, chemin in dossiers_a_afficher:
+            fichiers = [f for f in os.listdir(chemin) if f.lower().endswith('.png')]
+            n_images = min(len(fichiers), 5) 
+            
+            if n_images > 0:
+                print(f"\n--- Aperçu des {n_images} premières images classées '{nom}' ---")
+                plt.figure(figsize=(10, 2))
+                for i in range(n_images):
+                    plt.subplot(1, 5, i + 1)
+                    img = Image.open(os.path.join(chemin, fichiers[i]))
+                    plt.imshow(img)
+                    plt.axis('off')
+                plt.show()
