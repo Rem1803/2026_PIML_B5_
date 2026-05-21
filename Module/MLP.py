@@ -375,6 +375,53 @@ def mean_losses(losses_list):
 
     return np.mean(padded_losses, axis=0)
 
+def prepare_production_data(data, random_state=42):
+    """
+    Prépare les données pour l'entraînement final :
+    - normalisation
+    - clipping
+    - séparation pixels/features additionnelles
+    - PCA sur les pixels
+    - concaténation finale
+    """
+
+    mean_train = np.mean(data, axis=0)
+
+    std_train = np.std(data, axis=0)
+    std_train = np.where(std_train < 1e-8, 1e-8, std_train)
+
+    data_scaled = np.clip(
+        (data - mean_train) / std_train,
+        -5,
+        5
+    )
+
+    n_pixels = TAILLE_IMAGE[0] * TAILLE_IMAGE[1]
+
+    data_pixels = data_scaled[:, :n_pixels]
+    data_additional = data_scaled[:, n_pixels:]
+
+    pca = PCA(
+        n_components=COMPOSANTES_PCA,
+        random_state=random_state
+    )
+
+    data_pixels_pca = pca.fit_transform(data_pixels)
+
+    data_final = np.concatenate(
+        [data_pixels_pca, data_additional],
+        axis=1
+    )
+
+    return (
+        data_final,
+        mean_train,
+        std_train,
+        pca.components_,
+        pca.mean_
+    )
+
+
 def random_search_hyperparameters(data, target, train_func, predict_func, hidden_layer_configs,
     batch_sizes, learning_rate_range=(0.001,0.05), n_trials=8, random_state=42):
     """
