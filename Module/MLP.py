@@ -285,7 +285,7 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
     accuracies = []
     mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0} #initialisation de la matrice de confusion globale pour accumuler les résultats de tous les folds
 
-    n_pixels = data.shape[1] - 8 
+    n_pixels = 32 * 32
 
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
@@ -376,7 +376,7 @@ def random_search_hyperparameters(data, target, train_func, predict_func, hidden
     # Hyperparamètres fixes pour la validation croisée à l'intérieur de chaque essai de recherche aléatoire
     n_folds = 3        
     n_epochs = 60       
-    prune_threshold = 0.55  #seuil de précision en dessous duquel une configuration est considérée comme médiocre et est "prunée" (abandonnée) pour éviter de gaspiller du temps de calcul sur des configurations peu prometteuses
+    prune_threshold = 0.50  #seuil de précision en dessous duquel une configuration est considérée comme médiocre et est "prunée" (abandonnée) pour éviter de gaspiller du temps de calcul sur des configurations peu prometteuses
 
     for trial in range(n_trials):
 
