@@ -467,3 +467,9 @@ def load_model(filename):
     """
     params = np.load(filename, allow_pickle=True)
     return list(params["w"]), list(params["b"]), params["mean"], params["std"], params["pca_comp"], params["pca_mean"]
+
+def save_best_hyperparameters(filename, best_result):
+    np.save(filename, best_result, allow_pickle=True)
+
+def load_best_hyperparameters(filename):
+    return np.load(filename, allow_pickle=True).item()
