@@ -1,4 +1,4 @@
-Projet PIML 2026 - Classification de Cellules (Malaria)
+Projet PIML 2026 - Classification de Cellules (Malaria) /
 **Groupe 5**
 
 
@@ -68,12 +68,26 @@ Notre workflow utilise plusieurs bibliothèques de fonctions Python. Il convient
 
 Une fois cela fait, il faut télécharger l'intégralité des fichiers présents sur le Git et les placer dans un même dossier sur la machine.
 
-
-
 Comment exécuter la démonstration :
 ===
 
-Pour tester rapidement le modèle sans relancer l'entraînement, ouvrez le fichier Example/demo_inference.ipynb et exécutez les cellules. Il utilisera le modèle pré-entraîné modele_malaria.npz.
+La démonstration s'effectue via le notebook **`Example/demo_inference.ipynb`**.
+
+1. **Initialisation :** Le notebook charge automatiquement le modèle entraîné (`Workflow/modele_malaria.npz`) et les paramètres de prétraitement associés.
+2. **Cas d'usage 1 : Diagnostic unitaire**
+   - Le script sélectionne aléatoirement une cellule (saine ou infectée).
+   - Le modèle affiche le résultat du diagnostic avec son score de confiance (probabilité).
+3. **Cas d'usage 2 : Tri automatique de lot**
+   - Le script génère un dossier temporaire (`Temp_Test_Client`) contenant un lot de 10 cellules mélangées.
+   - Le modèle trie automatiquement ces cellules dans deux sous-dossiers : `Resultats_Saines/` et `Resultats_Infectees/`.
+   - **Visualisation :** Une grille d'images est générée directement dans le notebook pour permettre une vérification visuelle immédiate des prédictions (VP, VN, erreurs éventuelles).
+4. **Nettoyage :** Le dossier de test temporaire est automatiquement supprimé à la fin du processus pour maintenir l'environnement propre.
+
+> **Note aux évaluateurs :** Le modèle utilisé dans cette démo est une version pré-calculée. Pour explorer le processus complet d'apprentissage (incluant la recherche d'hyperparamètres et la validation croisée), veuillez consulter le notebook `Workflow/Workflow.ipynb`.
+
+Comment exécuter le Workflow :
+===
+
 
 - Ouvrir le fichier Workflow.ipynb situé dans le dossier /Workflow avec Jupyter Notebook, JupyterLab ou VS Code.
 
