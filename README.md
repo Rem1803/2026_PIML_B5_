@@ -73,6 +73,8 @@ Une fois cela fait, il faut télécharger l'intégralité des fichiers présents
 Comment exécuter la démonstration :
 ===
 
+Pour tester rapidement le modèle sans relancer l'entraînement, ouvrez le fichier Example/demo_inference.ipynb et exécutez les cellules. Il utilisera le modèle pré-entraîné modele_malaria.npz.
+
 - Ouvrir le fichier Workflow.ipynb situé dans le dossier /Workflow avec Jupyter Notebook, JupyterLab ou VS Code.
 
 - Exécuter la 1ère cellule de code pour importer les librairies nécessaires
@@ -80,3 +82,4 @@ Comment exécuter la démonstration :
 - Exécuter les 2e et 3e cellules de code pour charger le dataset utilisé et afficher quelque exemples d'images de cellules saines et infectées par la malaria
 
 - Exécuter
+
