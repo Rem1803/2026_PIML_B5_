@@ -298,27 +298,24 @@ def extract_advanced_features(arr_rgb, arr_hsv):
 def transformer_image_en_features(chemin_image, image_size):
     """
     Ouvre une image et la transforme en un vecteur prêt pour le réseau.
-    Intègre désormais le compte Watershed comme descripteur supplémentaire.
+    Intègre les 8 descripteurs + le Watershed (9 descripteurs au total).
     """
     img = Image.open(chemin_image).convert("RGB")
     img_resized = img.resize(image_size)
     arr_rgb = np.array(img_resized) / 255.0
     arr_hsv = rgb_to_hsv(arr_rgb)
     
-    # 1. Extraction des features avancées existantes
+    # 1. Descripteurs statistiques (8 variables)
     advanced_feats = extract_advanced_features(arr_rgb, arr_hsv)
     
-    # 2. Calcul du descripteur Watershed 
-    # On travaille sur une version grise de l'image pour le watershed
+    # 2. Descripteur Watershed (1 variable)
     gray_img = 0.299 * arr_rgb[:, :, 0] + 0.587 * arr_rgb[:, :, 1] + 0.114 * arr_rgb[:, :, 2]
-    # On passe la liste [gray_img] car watershed_region_count attend une liste
     n_regions = watershed_region_count([gray_img])[0]
     
-    # 3. On ajoute ce descripteur aux features avancées
-    # advanced_feats est un array, on lui ajoute la valeur du compte
+    # 3. Fusion des descripteurs (9 variables)
     advanced_feats_full = np.append(advanced_feats, n_regions)
     
-    # 4. Concatenation finale
+    # 4. Concatenation avec les pixels (H * S)
     arr_feature = arr_hsv[:, :, 0] * arr_hsv[:, :, 1]
     combined_features = np.concatenate([arr_feature.flatten(), advanced_feats_full])
     

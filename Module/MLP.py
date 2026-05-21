@@ -285,8 +285,8 @@ def cross_validation(data, target, train_func, predict_func, n_folds=5, learning
     accuracies = []
     mc_globale = {'VP': 0, 'VN': 0, 'FP': 0, 'FN': 0} #initialisation de la matrice de confusion globale pour accumuler les résultats de tous les folds
 
-    n_pixels = data.shape[1] - 8 
-
+    n_pixels = 32 * 32
+    
     for k in range(n_folds):
         print(f"--- Fold {k+1}/{n_folds} ---")
 

@@ -38,8 +38,15 @@ def plot_image_grid(uninfected_dir, parasitized_dir, n_images_per_class=8):
     plt.show()
 
 def plot_advanced_eda(data, target):
+    # 1. Normalisation (Z-score) pour la visualisation
+    mean = np.mean(data, axis=0)
+    std = np.std(data, axis=0)
+    std = np.where(std < 1e-8, 1e-8, std) # Sécurité division par zéro
+    data_scaled = (data - mean) / std
+    
+    # 2. PCA sur les données normalisées
     pca = PCA(n_components=2)
-    data_pca = pca.fit_transform(data)
+    data_pca = pca.fit_transform(data_scaled)
     
     pca_saines = data_pca[target == 0]
     pca_infectees = data_pca[target == 1]
@@ -47,7 +54,7 @@ def plot_advanced_eda(data, target):
     plt.figure(figsize=(8, 6))
     plt.scatter(pca_saines[:, 0], pca_saines[:, 1], alpha=0.5, label='Saines', edgecolors='none')
     plt.scatter(pca_infectees[:, 0], pca_infectees[:, 1], alpha=0.5, label='Infectées', edgecolors='none')
-    plt.title("Projection PCA (Espace à 2 Dimensions)")
+    plt.title("Projection PCA (Données standardisées)")
     plt.xlabel(f"Composante Principale 1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
     plt.ylabel(f"Composante Principale 2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
     plt.legend()
