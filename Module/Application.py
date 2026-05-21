@@ -41,7 +41,7 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
     pixels_pca = np.dot(pixels_scaled - pca_mean, pca_comp.T)
     features_final = np.concatenate([pixels_pca, expert_scaled])
 
-    # Prédiction
+    # Prédiction 
     proba = mlp.predict_proba_relu(features_final, w, b)
     prediction = 1 if proba >= seuil else 0
     
@@ -49,7 +49,8 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
     plt.figure(figsize=(6, 6))
     plt.imshow(img_originale)
     plt.axis('off')
-    
+
+    # Affichage du résultat avec une couleur indicative
     if prediction == 1:
         statut = "INFECTÉE (Malaria)"
         couleur = "#d62728"  
