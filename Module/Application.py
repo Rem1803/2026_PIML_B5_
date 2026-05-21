@@ -46,7 +46,8 @@ def diagnostiquer_une_cellule(image_path, w, b, mean_train, std_train, pca_comp,
     plt.show()
     plt.close()
 
-def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, pca_mean, image_size=(32, 32), seuil=0.35):
+def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, pca_mean, 
+                         image_size=(32, 32), seuil=0.35, afficher_resultats=True):
     if not os.path.exists(dossier_entree):
         print(f"Erreur : Le dossier d'entrée {dossier_entree} n'existe pas.")
         return
@@ -104,3 +105,27 @@ def trier_dossier_images(dossier_entree, w, b, mean_train, std_train, pca_comp, 
     print(f"Total analysé : {total}")
     print(f"Détectées Saines    : {saines_count} -> copiées dans '{dossier_saines}'")
     print(f"Détectées Infectées : {infectees_count} -> copiées dans '{dossier_infectees}'")
+    
+    if afficher_resultats:
+        import matplotlib.pyplot as plt
+        from PIL import Image
+        
+        # On définit les dossiers à visualiser
+        dossiers_a_afficher = [
+            ("Saines", dossier_saines), 
+            ("Infectées", dossier_infectees)
+        ]
+        
+        for nom, chemin in dossiers_a_afficher:
+            fichiers = [f for f in os.listdir(chemin) if f.lower().endswith('.png')]
+            n_images = min(len(fichiers), 5) # On en affiche 5 max
+            
+            if n_images > 0:
+                print(f"\n--- Aperçu des {n_images} premières images classées '{nom}' ---")
+                plt.figure(figsize=(10, 2))
+                for i in range(n_images):
+                    plt.subplot(1, 5, i + 1)
+                    img = Image.open(os.path.join(chemin, fichiers[i]))
+                    plt.imshow(img)
+                    plt.axis('off')
+                plt.show()
