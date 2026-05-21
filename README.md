@@ -1,8 +1,7 @@
 # Projet PIML 2026 - Classification de Cellules (Malaria) - Groupe 5
 
-
-![Schéma du pipeline de classification](Doc/workflow.png)
-(Si l'image ne s'affiche pas essayez de faire Ctrl+Maj+V)
+Si l'image ne s'affiche pas essayez de faire Ctrl+Maj+V
+![Schéma du pipeline de classification](Doc/Workflow.png)
 
 
 Objectifs :
