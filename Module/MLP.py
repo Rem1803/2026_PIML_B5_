@@ -370,7 +370,7 @@ def mean_losses(losses_list):
     padded_losses = []
 
     for losses in losses_list:
-        padded = losses + [losses[-1]] * (max_len - len(losses))
+        padded = losses + [losses[-1]] * (max_len - len(losses)) #on remplit les pertes manquantes avec la dernière perte connue pour éviter de fausser la moyenne
         padded_losses.append(padded)
 
     return np.mean(padded_losses, axis=0)
