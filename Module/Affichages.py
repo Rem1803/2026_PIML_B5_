@@ -84,10 +84,6 @@ def plot_advanced_eda(data, target):
 def plot_losses(losses, title="Evolution de la loss"):
     """
     Visualise la courbe de convergence de la fonction de coût (Loss).
-
-    Args:
-        losses (list): Liste des valeurs de loss calculées à chaque époque.
-        title (str, optional): Titre du graphique. Défaut à "Evolution de la loss".
     """
     plt.figure(figsize=(10, 5))
     plt.plot(losses)
